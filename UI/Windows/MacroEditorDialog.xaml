@@ -1,0 +1,378 @@
+<Window x:Class="MacroMaster.UI.Windows.MacroEditorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MacroMaster.UI.Controls"
+        xmlns:models="clr-namespace:MacroMaster.Core.Models"
+        Title="Macro Editor - MacroMaster"
+        Icon="/Assets/app.ico"
+        Width="1160" Height="820"
+        WindowStartupLocation="CenterOwner"
+        Background="Transparent"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="NoResize">
+
+    <Border CornerRadius="16" Background="{StaticResource BgDarkBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1.5" ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <!-- Title Bar -->
+                <RowDefinition Height="56"/>
+                <!-- Main Content Area -->
+                <RowDefinition Height="*"/>
+                <!-- Footer Action Bar -->
+                <RowDefinition Height="60"/>
+            </Grid.RowDefinitions>
+
+            <!-- TITLE BAR -->
+            <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1.5" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Margin="20,0,16,0">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <controls:LucideIcon IconKey="edit" Foreground="{StaticResource NeonEmeraldGlowBrush}" Size="20" StrokeThickness="2.8" Margin="0,0,10,0"/>
+                        <TextBlock Text="Macro Editor &amp; Timeline Builder" FontSize="17" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <Button Style="{StaticResource IconButton}" HorizontalAlignment="Right" VerticalAlignment="Center" Width="36" Height="36" Click="CloseBtn_Click">
+                        <controls:LucideIcon IconKey="x" Foreground="{StaticResource TextSecondaryBrush}" Size="18" StrokeThickness="2.8"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- MAIN CONTENT (Split View: Settings on Left, Action Timeline + Step Inspector on Right) -->
+            <Grid Grid.Row="1" Margin="20,14,20,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="380"/>
+                    <ColumnDefinition Width="18"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- LEFT COLUMN: GENERAL, TRIGGER & ARMING CONFIG -->
+                <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,0,6,0">
+                        <!-- General Properties Card -->
+                        <Border Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1.5" CornerRadius="12" Padding="16" Margin="0,0,0,14">
+                            <StackPanel>
+                                <TextBlock Text="GENERAL CONFIGURATION" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+
+                                <TextBlock Text="Macro Name" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtName" Style="{StaticResource ModernTextBox}" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Description / Notes" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtDescription" Style="{StaticResource ModernTextBox}" Height="54" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Category" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtCategory" Style="{StaticResource ModernTextBox}" Margin="0,0,0,10"/>
+
+                                <TextBlock Text="Target Process (e.g. destiny2.exe or * for Global)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                <TextBox x:Name="TxtProcess" Style="{StaticResource ModernTextBox}" Text="*"/>
+                            </StackPanel>
+                        </Border>
+
+                            <!-- Trigger & Execution Mode Card -->
+                            <Border Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="2.5" CornerRadius="14" Padding="16" Margin="0,0,0,14">
+                                <StackPanel>
+                                    <TextBlock Text="TRIGGER ACTIVATION" FontSize="12" FontWeight="Bold" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+
+                                    <TextBlock Text="Trigger Key / Mouse Button" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                    <Grid Margin="0,0,0,12">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="TxtTriggerKey" Style="{StaticResource ModernTextBox}" Grid.Column="0" Margin="0,0,8,0"/>
+                                        <Button x:Name="BtnCaptureKey" Grid.Column="1" Style="{StaticResource GlowButton}" Padding="14,6" Content="Capture" Click="BtnCaptureKey_Click" ToolTip="Click then press any key or mouse button"/>
+                                    </Grid>
+
+                                    <TextBlock Text="Chord Keys (e.g. ä, ö - all held down)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                    <TextBox x:Name="TxtChordKeys" Style="{StaticResource ModernTextBox}" Margin="0,0,0,12"/>
+
+                                    <!-- Modifiers -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                        <CheckBox x:Name="ChkCtrl" Style="{StaticResource ModernSwitch}" Content="Ctrl" Margin="0,0,12,0"/>
+                                        <CheckBox x:Name="ChkShift" Style="{StaticResource ModernSwitch}" Content="Shift" Margin="0,0,12,0"/>
+                                        <CheckBox x:Name="ChkAlt" Style="{StaticResource ModernSwitch}" Content="Alt"/>
+                                    </StackPanel>
+
+                                    <!-- Centered Execution Mode -->
+                                    <TextBlock Text="Execution Mode" FontSize="13.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" TextAlignment="Center" Margin="0,0,0,5"/>
+                                    <ComboBox x:Name="CmbMode" Height="40" HorizontalContentAlignment="Center" Margin="0,0,0,12" SelectionChanged="CmbMode_SelectionChanged">
+                                        <ComboBoxItem Content="Play Once" HorizontalContentAlignment="Center"/>
+                                        <ComboBoxItem Content="Toggle On/Off (Loop until pressed again)" HorizontalContentAlignment="Center"/>
+                                        <ComboBoxItem Content="Repeat N Times" HorizontalContentAlignment="Center"/>
+                                    </ComboBox>
+
+                                    <StackPanel x:Name="RepeatOptionsPanel" Visibility="Collapsed">
+                                        <TextBlock Text="Repeat Count" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                        <TextBox x:Name="TxtRepeatCount" Style="{StaticResource ModernTextBox}" Text="3" Margin="0,0,0,8"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Arming Mode Card (Destiny 2 Wellskate / Groundskate) -->
+                            <Border Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="2.5" CornerRadius="14" Padding="16">
+                                <StackPanel>
+                                    <CheckBox x:Name="ChkRequiresArming" Style="{StaticResource ModernSwitch}" Content="Multi-Mode Arming (e.g. Wellskate)" FontWeight="SemiBold" Margin="0,0,0,12" Checked="ChkRequiresArming_Checked" Unchecked="ChkRequiresArming_Checked"/>
+
+                                    <StackPanel x:Name="ArmingConfigPanel" Visibility="Collapsed">
+                                        <TextBlock Text="Arming Key (e.g. PgUp or PgDn)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                        <TextBox x:Name="TxtArmingKey" Style="{StaticResource ModernTextBox}" Margin="0,0,0,10"/>
+
+                                        <TextBlock Text="Arming Mode Name (shown in HUD)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                        <TextBox x:Name="TxtArmingName" Style="{StaticResource ModernTextBox}" Margin="0,0,0,10"/>
+
+                                        <TextBlock Text="Mode Group (e.g. Skate Modes)" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,5"/>
+                                        <TextBox x:Name="TxtArmingGroup" Style="{StaticResource ModernTextBox}"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!-- RIGHT COLUMN: VISUAL ACTION TIMELINE + ACTION STEP PARAMETER INSPECTOR -->
+                    <Grid Grid.Column="2">
+                        <Grid.RowDefinitions>
+                            <!-- Timeline Header & Action Buttons -->
+                            <RowDefinition Height="Auto"/>
+                            <!-- Timeline Steps List -->
+                            <RowDefinition Height="*"/>
+                            <!-- Step Parameter Inspector Editor -->
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- ACTION BAR (With Plenty of Spacing so Nothing Collides) -->
+                        <Border Grid.Row="0" Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="2.5" CornerRadius="14" Padding="14,10" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Left Title -->
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <controls:LucideIcon IconKey="layers" Foreground="{StaticResource NeonEmeraldGlowBrush}" Size="20" StrokeThickness="2.6" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Action Timeline" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Right Add Action Buttons (Renamed to Move) -->
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                    <Button Style="{StaticResource GlowButton}" Padding="12,6" Margin="0,0,6,0" Click="AddKeyTap_Click" ToolTip="Add Key Action (Tap / Hold / Release)">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <controls:LucideIcon IconKey="keyboard" Size="16" StrokeThickness="2.4" Margin="0,0,5,0" Foreground="{StaticResource NeonVioletGlowBrush}"/>
+                                            <TextBlock Text="Key" FontSize="13.5"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Style="{StaticResource GlowButton}" Padding="12,6" Margin="0,0,6,0" Click="AddMouseClick_Click" ToolTip="Add Mouse Action (Click / Down / Up / Scroll)">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <controls:LucideIcon IconKey="mouse" Size="16" StrokeThickness="2.4" Margin="0,0,5,0" Foreground="{StaticResource NeonEmeraldGlowBrush}"/>
+                                            <TextBlock Text="Mouse" FontSize="13.5"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button Style="{StaticResource GlowButton}" Padding="12,6" Margin="0,0,6,0" Click="AddDelay_Click" ToolTip="Add Delay / Sleep Wait">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <controls:LucideIcon IconKey="clock" Size="16" StrokeThickness="2.4" Margin="0,0,5,0" Foreground="{StaticResource NeonCyanBrush}"/>
+                                            <TextBlock Text="Wait" FontSize="13.5"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Renamed from Recoil to Move -->
+                                    <Button Style="{StaticResource GlowButton}" Padding="12,6" Margin="0,0,10,0" Click="AddMouseMove_Click" ToolTip="Add Hardware Mouse Movement (dx, dy)">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <controls:LucideIcon IconKey="crosshair" Size="16" StrokeThickness="2.4" Margin="0,0,5,0" Foreground="{StaticResource NeonAmberBrush}"/>
+                                            <TextBlock Text="Move" FontSize="13.5"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <Button x:Name="BtnRecord" Style="{StaticResource GlowButton}" Padding="14,6" Click="BtnRecord_Click" Background="#2C1A24" BorderBrush="#EF4444">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <controls:LucideIcon x:Name="RecordIcon" IconKey="zap" Size="16" StrokeThickness="2.6" Margin="0,0,5,0" Foreground="#EF4444"/>
+                                            <TextBlock x:Name="RecordText" Text="Record" FontSize="13.5" Foreground="#EF4444" FontWeight="Bold"/>
+                                        </StackPanel>
+                                    </Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- TIMELINE LIST (Vector Sharp - No Blurriness on Selection) -->
+                        <Border Grid.Row="1" Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="2.5" CornerRadius="14" Padding="10">
+                            <ListBox x:Name="ActionsList" Background="Transparent" BorderThickness="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionChanged="ActionsList_SelectionChanged">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:MacroAction}">
+                                        <Grid HorizontalAlignment="Stretch">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="34"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Action Icon -->
+                                            <Border Grid.Column="0" Width="30" Height="30" CornerRadius="7" Background="#1D2436" BorderBrush="#354466" BorderThickness="2" VerticalAlignment="Center">
+                                                <controls:LucideIcon IconKey="{Binding IconKey}" Size="16" StrokeThickness="2.4" Foreground="{StaticResource NeonEmeraldGlowBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+
+                                            <!-- Display Text with Hold Duration / Timing -->
+                                            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayText}" FontSize="14.5" FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                            </StackPanel>
+
+                                            <!-- Item Actions (Move Up, Move Down, Delete) -->
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Button Style="{StaticResource IconButton}" Width="30" Height="30" Click="StepMoveUp_Click" ToolTip="Move Up">
+                                                    <controls:LucideIcon IconKey="arrow-up" Size="15" StrokeThickness="2.6" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                </Button>
+                                                <Button Style="{StaticResource IconButton}" Width="30" Height="30" Click="StepMoveDown_Click" ToolTip="Move Down">
+                                                    <controls:LucideIcon IconKey="arrow-down" Size="15" StrokeThickness="2.6" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                </Button>
+                                                <Button Style="{StaticResource IconButton}" Width="30" Height="30" Click="StepDelete_Click" ToolTip="Delete Step">
+                                                    <controls:LucideIcon IconKey="trash-2" Size="15" StrokeThickness="2.4" Foreground="{StaticResource AlertRedBrush}"/>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+
+                        <!-- STEP PARAMETER INSPECTOR (Allows editing timings, hold duration, keys, and values anytime!) -->
+                        <Border x:Name="StepInspectorBorder" Grid.Row="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource NeonEmeraldBrush}" BorderThickness="2.5" CornerRadius="14" Padding="16,12" Margin="0,12,0,0">
+                            <StackPanel>
+                                <Grid Margin="0,0,0,10">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <Border Width="8" Height="8" CornerRadius="4" Background="{StaticResource NeonEmeraldGlowBrush}" Margin="0,0,8,0"/>
+                                        <TextBlock x:Name="TxtInspectorHeader" Text="EDIT SELECTED STEP" FontSize="13.5" FontWeight="Bold" Foreground="{StaticResource NeonEmeraldGlowBrush}"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 1. Key Action Controls -->
+                                <Grid x:Name="PanelKeyAction" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Key Type -->
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="Action Type" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <ComboBox x:Name="CmbKeyType" Height="36" FontSize="13" SelectionChanged="CmbKeyType_SelectionChanged">
+                                            <ComboBoxItem Content="Key Tap (Press + Hold + Release)"/>
+                                            <ComboBoxItem Content="Key Down (Hold Down)"/>
+                                            <ComboBoxItem Content="Key Up (Release)"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <!-- Key Name -->
+                                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                        <TextBlock Text="Key Name" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="TxtActionKey" Style="{StaticResource ModernTextBox}" Padding="8,5" TextChanged="TxtActionKey_TextChanged"/>
+                                            <Button x:Name="BtnCaptureActionKey" Grid.Column="1" Style="{StaticResource GlowButton}" Padding="8,4" Content="Set" Margin="6,0,0,0" Click="BtnCaptureActionKey_Click"/>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Hold Duration for Key Tap -->
+                                    <StackPanel x:Name="PanelKeyHoldDuration" Grid.Column="2">
+                                        <TextBlock Text="Hold Duration (ms)" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtKeyHoldDuration" Style="{StaticResource ModernTextBox}" Padding="8,5" Text="25" TextChanged="TxtKeyHoldDuration_TextChanged"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 2. Mouse Action Controls (Down + Hold + Up in one action or separate) -->
+                                <Grid x:Name="PanelMouseAction" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Mouse Action Type -->
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="Mouse Action" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <ComboBox x:Name="CmbMouseType" Height="36" FontSize="13" SelectionChanged="CmbMouseType_SelectionChanged">
+                                            <ComboBoxItem Content="Mouse Click (Down + Hold + Up)"/>
+                                            <ComboBoxItem Content="Mouse Down (Hold Down)"/>
+                                            <ComboBoxItem Content="Mouse Up (Release)"/>
+                                            <ComboBoxItem Content="Mouse Scroll"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <!-- Mouse Button -->
+                                    <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                                        <TextBlock Text="Mouse Button" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <ComboBox x:Name="CmbMouseButton" Height="36" FontSize="13" SelectionChanged="CmbMouseButton_SelectionChanged">
+                                            <ComboBoxItem Content="Left Button"/>
+                                            <ComboBoxItem Content="Right Button"/>
+                                            <ComboBoxItem Content="Middle Button"/>
+                                            <ComboBoxItem Content="Mouse 4 (X1)"/>
+                                            <ComboBoxItem Content="Mouse 5 (X2)"/>
+                                        </ComboBox>
+                                    </StackPanel>
+
+                                    <!-- Hold Duration between Down and Up -->
+                                    <StackPanel x:Name="PanelMouseHoldDuration" Grid.Column="2">
+                                        <TextBlock Text="Hold Duration (ms)" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtMouseHoldDuration" Style="{StaticResource ModernTextBox}" Padding="8,5" Text="20" TextChanged="TxtMouseHoldDuration_TextChanged"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 3. Delay / Wait Action Controls -->
+                                <Grid x:Name="PanelDelayAction" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="Wait / Sleep Duration (ms)" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtDelayDuration" Style="{StaticResource ModernTextBox}" Padding="8,5" Text="50" TextChanged="TxtDelayDuration_TextChanged"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Random Jitter (±ms, Anti-Detection)" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtDelayJitter" Style="{StaticResource ModernTextBox}" Padding="8,5" Text="0" TextChanged="TxtDelayJitter_TextChanged"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <!-- 4. Mouse Move (Recoil) Controls -->
+                                <Grid x:Name="PanelMoveAction" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                                        <TextBlock Text="Move X (Horizontal dx in pixels)" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtMoveX" Style="{StaticResource ModernTextBox}" Padding="8,5" Text="0" TextChanged="TxtMoveX_TextChanged"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="Move Y (Vertical dy in pixels, e.g. +26)" FontSize="12.5" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,4"/>
+                                        <TextBox x:Name="TxtMoveY" Style="{StaticResource ModernTextBox}" Padding="8,5" Text="26" TextChanged="TxtMoveY_TextChanged"/>
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- FOOTER BAR -->
+                <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1.5,0,0" CornerRadius="0,0,14,14">
+                    <Grid Margin="20,0">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <TextBlock Text="High-Precision Sub-Millisecond Input Timeline" FontSize="13.5" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Style="{StaticResource GlowButton}" Content="Cancel" Margin="0,0,10,0" Padding="18,7" Click="CancelBtn_Click"/>
+                            <Button Style="{StaticResource PrimaryEmeraldButton}" Content="Save Macro" Padding="22,7" Click="SaveBtn_Click"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+    </Border>
+</Window>

@@ -1,0 +1,295 @@
+<Window x:Class="MacroMaster.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:controls="clr-namespace:MacroMaster.UI.Controls"
+        xmlns:models="clr-namespace:MacroMaster.Core.Models"
+        mc:Ignorable="d"
+        Title="MacroMaster"
+        Icon="Assets/app.ico"
+        Height="840" Width="1180"
+        MinHeight="700" MinWidth="1000"
+        WindowStartupLocation="CenterScreen"
+        Background="Transparent"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        ResizeMode="CanMinimize"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver">
+
+    <!-- Clean Single-Border Outer Frame with Crisp Rounded Corners and No Dark Halo / Outline Artifacts -->
+    <Border CornerRadius="16" Background="{StaticResource BgDarkBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1.5" ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <!-- 1. Custom Title Bar -->
+                <RowDefinition Height="60"/>
+                <!-- 2. Main App Body -->
+                <RowDefinition Height="*"/>
+                <!-- 3. Status / Footer Bar -->
+                <RowDefinition Height="48"/>
+            </Grid.RowDefinitions>
+
+            <!-- 1. TITLE BAR (Clean Stealth Header without Cube/Tags) -->
+            <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1.5" CornerRadius="14,14,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid Margin="22,0,18,0">
+                    <Grid.ColumnDefinitions>
+                        <!-- Left: App Title & Master Engine Switch -->
+                        <ColumnDefinition Width="Auto"/>
+                        <!-- Spacer -->
+                        <ColumnDefinition Width="*"/>
+                        <!-- Right: Window Controls -->
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Clean Headline & Switch -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <!-- App Title -->
+                        <TextBlock Text="MacroMaster" FontSize="20" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,22,0"/>
+
+                        <!-- Master Toggle Switch -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <CheckBox x:Name="MasterEngineSwitchBox" Style="{StaticResource MasterEngineSwitch}" IsChecked="True" Checked="MasterEngineSwitch_Changed" Unchecked="MasterEngineSwitch_Changed" ToolTip="Master Engine Toggle"/>
+                            <TextBlock x:Name="MasterStatusLabel" Text="ACTIVE" FontSize="13.5" FontWeight="Bold" Foreground="{StaticResource NeonEmeraldGlowBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Window Control Buttons & Settings on the Right -->
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource IconButton}" Width="36" Height="36" Click="SettingsBtn_Click" ToolTip="Settings &amp; Overlay Config" Margin="0,0,4,0">
+                            <controls:LucideIcon IconKey="settings" Size="20" StrokeThickness="2.6" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="36" Height="36" Click="MinimizeBtn_Click" ToolTip="Minimize to Tray" Margin="0,0,4,0">
+                            <controls:LucideIcon IconKey="minus" Size="19" StrokeThickness="2.8" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Button>
+                        <Button Style="{StaticResource IconButton}" Width="36" Height="36" Click="CloseBtn_Click" ToolTip="Close Application">
+                            <controls:LucideIcon IconKey="x" Size="19" StrokeThickness="2.8" Foreground="{StaticResource TextSecondaryBrush}"/>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- 2. MAIN APP CONTENT -->
+            <Grid Grid.Row="1" Margin="22,16,22,14">
+                <Grid.RowDefinitions>
+                    <!-- Profile Header & Controls -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- Drag & Drop Zone & Macros List -->
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- SECTION 1: PROFILE SELECTOR & ACTIONS BAR (Active Profile & Active Scripts on Left, Action Buttons on Right) -->
+                <Border Grid.Row="0" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1.5" CornerRadius="12" Padding="16,10" Margin="0,0,0,14">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <!-- Left: Active Profile Selector + Active Scripts Button -->
+                            <ColumnDefinition Width="Auto"/>
+                            <!-- Spacer -->
+                            <ColumnDefinition Width="*"/>
+                            <!-- Right Side for Action Buttons -->
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Left: Active Profile + Active Scripts Interactive Button -->
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <controls:LucideIcon IconKey="layers" Size="20" StrokeThickness="2.6" Foreground="{StaticResource NeonEmeraldGlowBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Active Profile:" FontSize="15.5" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ComboBox x:Name="CmbProfiles" Width="280" Height="42" SelectionChanged="CmbProfiles_SelectionChanged" Margin="0,0,14,0"/>
+
+                            <!-- Interactive Active Scripts Badge Button -->
+                            <Button x:Name="BtnActiveScripts" Style="{StaticResource ActiveScriptsBadgeButton}" Click="BtnActiveScripts_Click" ToolTip="Click to view all currently active scripts &amp; triggers">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <controls:LucideIcon IconKey="zap" Size="16" StrokeThickness="2.6" Margin="0,0,6,0" Foreground="{StaticResource NeonEmeraldGlowBrush}"/>
+                                    <TextBlock x:Name="TxtActiveScriptsCount" Text="Active Scripts (3)" FontSize="13.5" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+
+                        <!-- Right Side: Import .ahk & New Macro Buttons -->
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Button Style="{StaticResource GlowButton}" Padding="16,8" Margin="0,0,10,0" Click="ImportAhkBtn_Click" ToolTip="Import .ahk AutoHotkey script">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <controls:LucideIcon IconKey="upload" Size="16" StrokeThickness="2.6" Margin="0,0,8,0" Foreground="{StaticResource NeonCyanBrush}"/>
+                                    <TextBlock Text="Import .ahk Script" FontSize="13.5"/>
+                                </StackPanel>
+                            </Button>
+
+                            <Button Style="{StaticResource PrimaryEmeraldButton}" Padding="20,8" Click="NewMacroBtn_Click">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <controls:LucideIcon IconKey="plus" Size="16" StrokeThickness="2.8" Margin="0,0,8,0" Foreground="#FFFFFF"/>
+                                    <TextBlock Text="New Macro" FontSize="13.5"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                    <!-- SECTION 2: DRAG & DROP ZONE & MACROS LIST -->
+                    <Grid Grid.Row="1">
+                        <Grid.RowDefinitions>
+                            <!-- Drag and Drop Banner -->
+                            <RowDefinition Height="Auto"/>
+                            <!-- Scrollable Macro List -->
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- DRAG & DROP ZONE BANNER -->
+                        <Border x:Name="DropZoneBorder" Grid.Row="0" Background="#111726" BorderBrush="#33436B" BorderThickness="2.5" CornerRadius="12" Padding="16,12" Margin="0,0,0,12">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <controls:LucideIcon IconKey="file-code" Size="22" StrokeThickness="2.6" Foreground="{StaticResource NeonEmeraldGlowBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Drag &amp; drop AutoHotkey (.ahk) scripts anywhere to automatically convert them into visual macros" FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <!-- UNIFORM FULL-WIDTH MACRO LIST (Stretches Full Width, Card Border Glows on Hover/Selection) -->
+                        <Border Grid.Row="1" Background="{StaticResource CardBgBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="2.5" CornerRadius="14" Padding="12">
+                            <ListBox x:Name="MacrosListBox" Background="Transparent" BorderThickness="0" HorizontalContentAlignment="Stretch" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type models:MacroDefinition}">
+                                        <!-- Uniform Full-Width Content Container -->
+                                        <Grid Height="114" HorizontalAlignment="Stretch">
+                                            <Grid.RowDefinitions>
+                                                <!-- Row 0: Enable Switch + Title + Badges -->
+                                                <RowDefinition Height="Auto"/>
+                                                <!-- Row 1: Trigger & Mode side-by-side on Left, Steps on Right -->
+                                                <RowDefinition Height="*"/>
+                                                <!-- Row 2: Description on Left (Safe Margin), Aligned Buttons on Right -->
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- ROW 0: Enable Switch + Title + Badges -->
+                                            <Grid Grid.Row="0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Enable Switch -->
+                                                <CheckBox Grid.Column="0" Style="{StaticResource ModernSwitch}" IsChecked="{Binding IsEnabled}" Margin="0,0,12,0" VerticalAlignment="Center" Checked="MacroEnable_Changed" Unchecked="MacroEnable_Changed" ToolTip="Toggle Macro Enabled/Disabled"/>
+
+                                                <!-- Title & Badges in a Clean Single Line -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
+
+                                                    <!-- Arming Badge -->
+                                                    <Border Visibility="{Binding RequiresArming, Converter={StaticResource BoolToVis}}" Background="#1A2E2A" BorderBrush="{StaticResource NeonEmeraldBrush}" BorderThickness="2" CornerRadius="6" Padding="8,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <controls:LucideIcon IconKey="rocket" Size="14" StrokeThickness="2.4" Foreground="{StaticResource NeonEmeraldGlowBrush}" Margin="0,0,4,0"/>
+                                                            <TextBlock Text="{Binding ArmingDisplayName}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource NeonEmeraldGlowBrush}"/>
+                                                        </StackPanel>
+                                                    </Border>
+
+                                                    <!-- Process Filter Badge -->
+                                                    <Border Background="#1C2436" BorderBrush="#354466" BorderThickness="2" CornerRadius="6" Padding="8,2" Margin="0,0,8,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding ProcessFilter}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                    </Border>
+
+                                                    <!-- Category Badge -->
+                                                    <Border Background="#2A1F3D" BorderBrush="#4E3B70" BorderThickness="2" CornerRadius="6" Padding="8,2" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Category}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource NeonVioletGlowBrush}"/>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <!-- Top Right Status Badge -->
+                                                <Border Grid.Column="2" Background="#172338" BorderBrush="#2E3E60" BorderThickness="2" CornerRadius="6" Padding="10,2" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding StatusBadgeText}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource NeonEmeraldGlowBrush}"/>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- ROW 1: Trigger Key AND Mode next to it (Left Side), Steps (Right Side) -->
+                                            <Grid Grid.Row="1" VerticalAlignment="Center">
+                                                <Grid.ColumnDefinitions>
+                                                    <!-- Left: Trigger Key + Mode Badge placed right next to it -->
+                                                    <ColumnDefinition Width="*"/>
+                                                    <!-- Right: Steps Count -->
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Grouped Trigger & Execution Mode -->
+                                                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <!-- Trigger Key -->
+                                                    <TextBlock Text="Trigger: " FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                    <Border Background="#1C283E" BorderBrush="#2A3D63" BorderThickness="2" CornerRadius="6" Padding="8,2.5" Margin="0,0,14,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Trigger.DisplayString}" FontSize="13.5" FontWeight="Bold" Foreground="#38BDF8"/>
+                                                    </Border>
+
+                                                    <!-- Execution Mode next to Trigger -->
+                                                    <TextBlock Text="Mode: " FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                    <Border Background="#221B35" BorderBrush="#423466" BorderThickness="2" CornerRadius="6" Padding="10,2.5" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Mode}" FontSize="13" FontWeight="Bold" Foreground="{StaticResource NeonVioletGlowBrush}" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <!-- Steps Count on the Right -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <TextBlock Text="Steps: " FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                    <Border Background="#1C2436" BorderBrush="#354466" BorderThickness="2" CornerRadius="6" Padding="8,2.5" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Actions.Count}" FontSize="13.5" FontWeight="Bold" Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+
+                                            <!-- ROW 2: ACTION BUTTONS PUSHED TO THE BOTTOM BASELINE -->
+                                            <Grid Grid.Row="2">
+                                                <Grid.ColumnDefinitions>
+                                                    <!-- Description column with large right margin so it never bleeds into buttons -->
+                                                    <ColumnDefinition Width="*"/>
+                                                    <!-- Aligned Action Buttons -->
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- Non-bleeding Description Note -->
+                                                <TextBlock Grid.Column="0" Text="{Binding Description}" FontSize="13" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="0,0,24,0"/>
+
+                                                <!-- Action Buttons Locked to Exact Same Alignment on Every Card -->
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                                                    <Button Style="{StaticResource GlowButton}" Padding="16,5" Height="34" Margin="0,0,8,0" Click="MacroRunNow_Click" ToolTip="Test Run Macro">
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <controls:LucideIcon IconKey="play" Size="15" StrokeThickness="2.6" Foreground="{StaticResource NeonEmeraldGlowBrush}" Margin="0,0,5,0"/>
+                                                            <TextBlock Text="Run" FontSize="13.5" FontWeight="Bold"/>
+                                                        </StackPanel>
+                                                    </Button>
+
+                                                    <Button Style="{StaticResource IconButton}" Width="34" Height="34" Margin="0,0,6,0" Click="MacroEdit_Click" ToolTip="Edit Macro Timeline">
+                                                        <controls:LucideIcon IconKey="edit" Size="18" StrokeThickness="2.4" Foreground="{StaticResource TextSecondaryBrush}"/>
+                                                    </Button>
+
+                                                    <Button Style="{StaticResource IconButton}" Width="34" Height="34" Click="MacroDelete_Click" ToolTip="Delete Macro">
+                                                        <controls:LucideIcon IconKey="trash-2" Size="18" StrokeThickness="2.4" Foreground="{StaticResource AlertRedBrush}"/>
+                                                    </Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </Border>
+                    </Grid>
+                </Grid>
+
+                <!-- 3. FOOTER / STATUS BAR (Large, Crisp, Clean Curved Base) -->
+                <Border Grid.Row="2" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1.5,0,0" CornerRadius="0,0,14,14">
+                    <Grid Margin="22,0">
+                        <!-- Left: Emergency Killswitch Banner -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border Width="10" Height="10" CornerRadius="5" Background="{StaticResource NeonEmeraldBrush}" Margin="0,0,10,0"/>
+                            <TextBlock Text="Emergency Killswitch: " FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource TextSecondaryBrush}"/>
+                            <Border Background="#2C1920" BorderBrush="#EF4444" BorderThickness="2" CornerRadius="6" Padding="8,2" Margin="6,0,16,0">
+                                <TextBlock Text="F12 (Press anytime to release all inputs)" FontSize="13" FontWeight="Bold" Foreground="#EF4444"/>
+                            </Border>
+                            <TextBlock Text="• High-Frequency 1ms Multimedia Timer Active" FontSize="13" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+
+                        <!-- Right: DPI Vector Engine -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <TextBlock Text="PerMonitorV2 High-DPI Vector Engine" FontSize="13" Foreground="{StaticResource TextMutedBrush}"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+    </Border>
+</Window>

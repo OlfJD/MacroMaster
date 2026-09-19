@@ -1,0 +1,29 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+release/
+[Ll]og/
+[Ll]ogs/
+
+# Compiled assemblies and executables
+*.exe
+*.dll
+*.pdb
+*.deps.json
+*.runtimeconfig.json
+
+# Visual Studio / Rider files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# OS Files
+.DS_Store
+Thumbs.db
