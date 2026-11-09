@@ -104,14 +104,14 @@ public class MacroEngine : IDisposable
         var cts = new CancellationTokenSource();
         _runningTasks["QuickAction_AutoClicker"] = cts;
 
-        Task.Run(async () =>
+        Task.Run(() =>
         {
             int intervalMs = Math.Max(1, 1000 / Math.Max(1, Settings.AutoClickerCps));
             while (!cts.Token.IsCancellationRequested)
             {
                 _simulator.MouseClick(Settings.AutoClickerButton, Math.Min(10, intervalMs / 2));
                 int waitMs = Math.Max(1, intervalMs - Math.Min(10, intervalMs / 2));
-                InputSimulator.PreciseSleep(waitMs);
+                InputSimulator.PreciseSleep(waitMs, cts.Token);
             }
         }, cts.Token);
     }
@@ -150,7 +150,7 @@ public class MacroEngine : IDisposable
             while (!cts.Token.IsCancellationRequested)
             {
                 _simulator.MouseClick(MouseButtonType.Right, 20);
-                InputSimulator.PreciseSleep(100);
+                InputSimulator.PreciseSleep(100, cts.Token);
             }
             _simulator.MouseUp(MouseButtonType.Left);
         }, cts.Token);
@@ -218,34 +218,9 @@ public class MacroEngine : IDisposable
         {
             foreach (var macro in ActiveProfile.Macros.Where(m => m.IsEnabled))
             {
-                // If requires arming, it must be currently armed
-                if (macro.RequiresArming && !macro.IsCurrentlyArmed) continue;
-
-                // Check process filter
-                if (!ProcessWatcher.IsProcessActive(macro.ProcessFilter)) continue;
-
-                // Check primary key
-                int primaryVk = KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey);
-                if (vkCode != primaryVk) continue;
-
-                // Check modifiers
-                if (macro.Trigger.RequireCtrl && !_keyboardHook.IsKeyDown(0x11)) continue;
-                if (macro.Trigger.RequireShift && !_keyboardHook.IsKeyDown(0x10)) continue;
-                if (macro.Trigger.RequireAlt && !_keyboardHook.IsKeyDown(0x12)) continue;
-
-                // Check chord keys (e.g. "ä", "ö")
-                bool allChordsPressed = true;
-                foreach (var chord in macro.Trigger.ChordKeys)
-                {
-                    int chordVk = KeyHelper.NormalizeToVk(chord);
-                    if (chordVk != 0 && !_keyboardHook.IsKeyDown(chordVk))
-                    {
-                        allChordsPressed = false;
-                        break;
-                    }
-                }
-
-                if (!allChordsPressed) continue;
+                // Cheap checks first: this runs inside the low-level hook for every keystroke
+                if (!KeyMatches(vkCode, KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey))) continue;
+                if (!TriggerConditionsMet(macro)) continue;
 
                 // All trigger conditions met!
                 ExecuteMacro(macro);
@@ -261,18 +236,65 @@ public class MacroEngine : IDisposable
         return false;
     }
 
+    /// <summary>Low-level hooks report left/right modifier codes; match them against generic ones.</summary>
+    private static bool KeyMatches(int vkCode, int targetVk)
+    {
+        if (targetVk == 0) return false;
+        if (vkCode == targetVk) return true;
+        return targetVk switch
+        {
+            0x10 => vkCode is 0xA0 or 0xA1,
+            0x11 => vkCode is 0xA2 or 0xA3,
+            0x12 => vkCode is 0xA4 or 0xA5,
+            0x5B => vkCode is 0x5C,
+            _ => false
+        };
+    }
+
+    /// <summary>Arming, modifiers, chord keys and process filter (checked last: it's the expensive one).</summary>
+    private bool TriggerConditionsMet(MacroDefinition macro)
+    {
+        if (macro.RequiresArming && !macro.IsCurrentlyArmed) return false;
+
+        if (macro.Trigger.RequireCtrl && !_keyboardHook.IsKeyDown(0x11)) return false;
+        if (macro.Trigger.RequireShift && !_keyboardHook.IsKeyDown(0x10)) return false;
+        if (macro.Trigger.RequireAlt && !_keyboardHook.IsKeyDown(0x12)) return false;
+        if (macro.Trigger.RequireWin && !_keyboardHook.IsKeyDown(0x5B)) return false;
+
+        // Chord keys (e.g. "ä", "ö")
+        foreach (var chord in macro.Trigger.ChordKeys)
+        {
+            int chordVk = KeyHelper.NormalizeToVk(chord);
+            if (chordVk != 0 && !_keyboardHook.IsKeyDown(chordVk)) return false;
+        }
+
+        return ProcessWatcher.IsProcessActive(macro.ProcessFilter);
+    }
+
+    private static int MouseButtonToVk(MouseButtonType button) => button switch
+    {
+        MouseButtonType.Left => 0x01,
+        MouseButtonType.Right => 0x02,
+        MouseButtonType.Middle => 0x04,
+        MouseButtonType.XButton1 => 0x05,
+        MouseButtonType.XButton2 => 0x06,
+        _ => 0
+    };
+
     private bool HandleMouseEvent(MouseButtonType button, bool isDown)
     {
         if (!isDown || !Settings.MasterEngineEnabled) return false;
 
-        string buttonName = button.ToString();
+        // Compare by virtual key: the editor stores mouse triggers as "Mouse 4" / "Left Click", and
+        // comparing to the enum name ("Left") also matched the Left *arrow* key and hijacked clicks
+        int buttonVk = MouseButtonToVk(button);
 
         if (ActiveProfile != null)
         {
-            foreach (var macro in ActiveProfile.Macros.Where(m => m.IsEnabled && m.Trigger.PrimaryKey.Equals(buttonName, StringComparison.OrdinalIgnoreCase)))
+            foreach (var macro in ActiveProfile.Macros.Where(m => m.IsEnabled))
             {
-                if (macro.RequiresArming && !macro.IsCurrentlyArmed) continue;
-                if (!ProcessWatcher.IsProcessActive(macro.ProcessFilter)) continue;
+                if (KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey) != buttonVk) continue;
+                if (!TriggerConditionsMet(macro)) continue;
 
                 ExecuteMacro(macro);
                 return true;
@@ -316,14 +338,20 @@ public class MacroEngine : IDisposable
                         ExecuteActionSequence(macro.Actions, cts.Token);
                         if (macro.LoopDelayMs > 0)
                         {
-                            InputSimulator.PreciseSleep(macro.LoopDelayMs);
+                            InputSimulator.PreciseSleep(macro.LoopDelayMs, cts.Token);
                         }
                     }
                 }
                 finally
                 {
-                    macro.IsRunning = false;
-                    _runningTasks.TryRemove(macro.Id, out _);
+                    // Only remove our own registration: after a quick off->on toggle a newer run is
+                    // already registered under the same id, and removing it would leave that loop
+                    // untracked (and unstoppable, even by the killswitch).
+                    _runningTasks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(macro.Id, cts));
+                    if (!_runningTasks.ContainsKey(macro.Id))
+                    {
+                        macro.IsRunning = false;
+                    }
                     OnStateRefreshed?.Invoke();
                 }
             }, cts.Token);
@@ -333,16 +361,29 @@ public class MacroEngine : IDisposable
             // Execute Once or Repeat N Times
             TriggerHud($"TRIGGERED: {macro.Name}", macro.Category, "zap", "#A78BFA");
 
+            // Registered under a unique key so EmergencyStop can cancel long repeat runs too
+            string runKey = $"{macro.Id}#run#{Guid.NewGuid():N}";
+            var cts = new CancellationTokenSource();
+            _runningTasks[runKey] = cts;
+
             Task.Run(() =>
             {
-                int times = Math.Max(1, macro.RepeatCount);
-                for (int i = 0; i < times; i++)
+                try
                 {
-                    ExecuteActionSequence(macro.Actions, CancellationToken.None);
-                    if (i < times - 1 && macro.LoopDelayMs > 0)
+                    // RepeatCount is kept when switching mode back to Once, so only honour it in RepeatCount mode
+                    int times = macro.Mode == ExecutionMode.RepeatCount ? Math.Max(1, macro.RepeatCount) : 1;
+                    for (int i = 0; i < times && !cts.Token.IsCancellationRequested; i++)
                     {
-                        InputSimulator.PreciseSleep(macro.LoopDelayMs);
+                        ExecuteActionSequence(macro.Actions, cts.Token);
+                        if (i < times - 1 && macro.LoopDelayMs > 0)
+                        {
+                            InputSimulator.PreciseSleep(macro.LoopDelayMs, cts.Token);
+                        }
                     }
+                }
+                finally
+                {
+                    _runningTasks.TryRemove(runKey, out _);
                 }
             });
         }
@@ -387,7 +428,7 @@ public class MacroEngine : IDisposable
                         int jitter = Random.Shared.Next(-action.RandomJitterMs, action.RandomJitterMs + 1);
                         delay = Math.Max(1, delay + jitter);
                     }
-                    InputSimulator.PreciseSleep(delay);
+                    InputSimulator.PreciseSleep(delay, token);
                     break;
                 case ActionType.Media:
                     _simulator.SendMediaCommand(action.MediaCommand);

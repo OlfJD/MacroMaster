@@ -9,8 +9,13 @@ public class LowLevelMouseHook : IDisposable
     public delegate bool MouseEventHandler(MouseButtonType button, bool isDown);
     public event MouseEventHandler? OnMouseEvent;
 
+    private const uint LLMHF_INJECTED = 0x01;
+
     private IntPtr _hookId = IntPtr.Zero;
     private Win32Api.HookProc? _hookProc;
+    // Buttons whose press a handler swallowed; the matching release is swallowed too.
+    // Only touched on the hook thread, so no locking needed.
+    private readonly HashSet<MouseButtonType> _suppressedButtons = new();
 
     public void Install()
     {
@@ -44,6 +49,7 @@ public class LowLevelMouseHook : IDisposable
             _hookId = IntPtr.Zero;
             _hookProc = null;
         }
+        _suppressedButtons.Clear();
     }
 
     private IntPtr HookCallback(int nCode, IntPtr wParam, IntPtr lParam)
@@ -51,7 +57,6 @@ public class LowLevelMouseHook : IDisposable
         if (nCode >= 0 && OnMouseEvent != null)
         {
             int msg = wParam.ToInt32();
-            var mouse = Marshal.PtrToStructure<Win32Api.MSLLHOOKSTRUCT>(lParam);
 
             MouseButtonType? button = null;
             bool isDown = false;
@@ -83,21 +88,32 @@ public class LowLevelMouseHook : IDisposable
                     isDown = false;
                     break;
                 case Win32Api.WM_XBUTTONDOWN:
-                    button = (mouse.mouseData >> 16) == Win32Api.XBUTTON1 ? MouseButtonType.XButton1 : MouseButtonType.XButton2;
-                    isDown = true;
-                    break;
                 case Win32Api.WM_XBUTTONUP:
-                    button = (mouse.mouseData >> 16) == Win32Api.XBUTTON1 ? MouseButtonType.XButton1 : MouseButtonType.XButton2;
-                    isDown = false;
+                    var data = Marshal.PtrToStructure<Win32Api.MSLLHOOKSTRUCT>(lParam);
+                    button = (data.mouseData >> 16) == Win32Api.XBUTTON1 ? MouseButtonType.XButton1 : MouseButtonType.XButton2;
+                    isDown = msg == Win32Api.WM_XBUTTONDOWN;
                     break;
             }
 
+            // Mouse moves (by far the most frequent event) fall straight through without marshaling
             if (button.HasValue)
             {
-                bool handled = OnMouseEvent.Invoke(button.Value, isDown);
-                if (handled)
+                var mouse = Marshal.PtrToStructure<Win32Api.MSLLHOOKSTRUCT>(lParam);
+
+                // Ignore our own synthesized clicks (auto clicker, macro actions) so they can't
+                // re-trigger mouse-bound macros recursively
+                if ((mouse.flags & LLMHF_INJECTED) == 0)
                 {
-                    return (IntPtr)1;
+                    bool handled = OnMouseEvent.Invoke(button.Value, isDown);
+                    if (isDown && handled)
+                    {
+                        _suppressedButtons.Add(button.Value);
+                        return (IntPtr)1;
+                    }
+                    if (!isDown && (_suppressedButtons.Remove(button.Value) || handled))
+                    {
+                        return (IntPtr)1;
+                    }
                 }
             }
         }

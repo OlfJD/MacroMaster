@@ -1,13 +1,21 @@
+using System.Collections.Concurrent;
 using System.Windows.Input;
 
 namespace MacroMaster.Core.Native;
 
 public static class KeyHelper
 {
+    // Called for every macro on every keystroke inside the low-level hook, so cache the parse
+    private static readonly ConcurrentDictionary<string, int> _vkCache = new();
+
     public static int NormalizeToVk(string key)
     {
         if (string.IsNullOrWhiteSpace(key)) return 0;
-        
+        return _vkCache.GetOrAdd(key, ParseKeyName);
+    }
+
+    private static int ParseKeyName(string key)
+    {
         string k = key.Trim().ToLowerInvariant();
 
         return k switch

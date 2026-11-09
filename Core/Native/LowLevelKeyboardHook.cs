@@ -11,7 +11,10 @@ public class LowLevelKeyboardHook : IDisposable
 
     private IntPtr _hookId = IntPtr.Zero;
     private Win32Api.HookProc? _hookProc;
+    // Physically held keys (injected events are ignored so our own SendInput can't corrupt chord state)
     private readonly HashSet<int> _pressedVkCodes = new();
+    // Keys whose initial key-down a handler swallowed: their auto-repeats and key-up are swallowed too
+    private readonly HashSet<int> _suppressedVkCodes = new();
     private readonly object _lock = new();
 
     public IReadOnlySet<int> PressedKeys
@@ -70,14 +73,26 @@ public class LowLevelKeyboardHook : IDisposable
         lock (_lock)
         {
             _pressedVkCodes.Clear();
+            _suppressedVkCodes.Clear();
         }
     }
 
+    /// <summary>
+    /// Low-level hooks report modifiers as left/right specific codes (VK_LSHIFT 0xA0 ... VK_RMENU 0xA5),
+    /// so the generic VK_SHIFT/VK_CONTROL/VK_MENU (and VK_LWIN for "Win") match either side.
+    /// </summary>
     public bool IsKeyDown(int vkCode)
     {
         lock (_lock)
         {
-            return _pressedVkCodes.Contains(vkCode);
+            return vkCode switch
+            {
+                0x10 => _pressedVkCodes.Contains(0x10) || _pressedVkCodes.Contains(0xA0) || _pressedVkCodes.Contains(0xA1),
+                0x11 => _pressedVkCodes.Contains(0x11) || _pressedVkCodes.Contains(0xA2) || _pressedVkCodes.Contains(0xA3),
+                0x12 => _pressedVkCodes.Contains(0x12) || _pressedVkCodes.Contains(0xA4) || _pressedVkCodes.Contains(0xA5),
+                0x5B => _pressedVkCodes.Contains(0x5B) || _pressedVkCodes.Contains(0x5C),
+                _ => _pressedVkCodes.Contains(vkCode)
+            };
         }
     }
 
@@ -91,36 +106,46 @@ public class LowLevelKeyboardHook : IDisposable
             bool isInjected = (kbd.flags & 0x10) != 0; // LLKHF_INJECTED
             int msg = wParam.ToInt32();
 
-            if (msg == Win32Api.WM_KEYDOWN || msg == Win32Api.WM_SYSKEYDOWN)
+            if (!isInjected && (msg == Win32Api.WM_KEYDOWN || msg == Win32Api.WM_SYSKEYDOWN))
             {
+                bool isRepeat;
                 lock (_lock)
                 {
-                    _pressedVkCodes.Add(vkCode);
+                    isRepeat = !_pressedVkCodes.Add(vkCode);
                 }
 
-                if (!isInjected && OnKeyDown != null)
+                if (isRepeat)
                 {
-                    bool handled = OnKeyDown.Invoke(vkCode, isExtended);
-                    if (handled)
+                    // Auto-repeat while the key is held: don't re-fire handlers (a held toggle hotkey
+                    // would flip on/off every repeat), but keep swallowing it if the first press was.
+                    lock (_lock)
                     {
-                        return (IntPtr)1; // Suppress original keystroke
+                        if (_suppressedVkCodes.Contains(vkCode)) return (IntPtr)1;
                     }
                 }
+                else if (OnKeyDown != null && OnKeyDown.Invoke(vkCode, isExtended))
+                {
+                    lock (_lock)
+                    {
+                        _suppressedVkCodes.Add(vkCode);
+                    }
+                    return (IntPtr)1; // Suppress original keystroke
+                }
             }
-            else if (msg == Win32Api.WM_KEYUP || msg == Win32Api.WM_SYSKEYUP)
+            else if (!isInjected && (msg == Win32Api.WM_KEYUP || msg == Win32Api.WM_SYSKEYUP))
             {
+                bool wasSuppressed;
                 lock (_lock)
                 {
                     _pressedVkCodes.Remove(vkCode);
+                    wasSuppressed = _suppressedVkCodes.Remove(vkCode);
                 }
 
-                if (!isInjected && OnKeyUp != null)
+                bool handled = OnKeyUp?.Invoke(vkCode, isExtended) ?? false;
+                // The app never saw the key-down, so don't hand it an orphaned key-up either
+                if (handled || wasSuppressed)
                 {
-                    bool handled = OnKeyUp.Invoke(vkCode, isExtended);
-                    if (handled)
-                    {
-                        return (IntPtr)1;
-                    }
+                    return (IntPtr)1;
                 }
             }
         }

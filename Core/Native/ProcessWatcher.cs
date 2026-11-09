@@ -4,6 +4,12 @@ namespace MacroMaster.Core.Native;
 
 public class ProcessWatcher
 {
+    // Process.GetProcessById is comparatively expensive and this runs inside the low-level hook on
+    // every trigger check, so remember the name for the last foreground PID.
+    private static uint _cachedPid;
+    private static string _cachedName = string.Empty;
+    private static readonly object _cacheLock = new();
+
     public static string GetActiveProcessName()
     {
         try
@@ -14,8 +20,20 @@ public class ProcessWatcher
             Win32Api.GetWindowThreadProcessId(hWnd, out uint processId);
             if (processId == 0) return string.Empty;
 
+            lock (_cacheLock)
+            {
+                if (processId == _cachedPid) return _cachedName;
+            }
+
             using var process = Process.GetProcessById((int)processId);
-            return process.ProcessName.ToLowerInvariant(); // e.g. "destiny2", "javaw"
+            string name = process.ProcessName.ToLowerInvariant(); // e.g. "destiny2", "javaw"
+
+            lock (_cacheLock)
+            {
+                _cachedPid = processId;
+                _cachedName = name;
+            }
+            return name;
         }
         catch
         {

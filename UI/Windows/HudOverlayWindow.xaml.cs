@@ -47,7 +47,8 @@ public partial class HudOverlayWindow : Window
 
     public void ShowNotification(string title, string subtitle, string iconKey, string accentColorHex, HudPosition position = HudPosition.TopCenter, int durationMs = 2200)
     {
-        Dispatcher.Invoke(() =>
+        // BeginInvoke: this is often called from inside the low-level input hook, which must return fast
+        Dispatcher.BeginInvoke(() =>
         {
             HudTitle.Text = title;
             HudSubtitle.Text = subtitle;

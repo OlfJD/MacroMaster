@@ -61,6 +61,16 @@ public partial class MainWindow : Window
         RefreshProfilesComboBox();
         RefreshMacrosList();
         SyncUiStates();
+
+        // 6. Sync Autostart Registration and Check for Silent Launch
+        AutoStartManager.SyncStartupRegistration(_engine.Settings.StartWithWindows);
+
+        bool isAutostart = Environment.GetCommandLineArgs().Any(arg => arg.Equals("--autostart", StringComparison.OrdinalIgnoreCase) || arg.Equals("-silent", StringComparison.OrdinalIgnoreCase) || arg.Equals("-minimized", StringComparison.OrdinalIgnoreCase));
+        if (isAutostart)
+        {
+            Hide();
+            WindowState = WindowState.Minimized;
+        }
     }
 
     private void ShowAndRestore()
@@ -77,7 +87,8 @@ public partial class MainWindow : Window
 
     private void Engine_OnStateRefreshed()
     {
-        Dispatcher.Invoke(SyncUiStates);
+        // Raised from macro worker threads too; don't block them on the UI thread
+        Dispatcher.BeginInvoke(SyncUiStates);
     }
 
     private void SyncUiStates()
@@ -157,6 +168,7 @@ public partial class MainWindow : Window
         if (!_isInitialized || string.IsNullOrEmpty(_profilesFilePath)) return;
         MacroJsonSerializer.SaveProfiles(_engine.Profiles.ToList(), _profilesFilePath);
         MacroJsonSerializer.SaveSettings(_engine.Settings, _settingsFilePath);
+        AutoStartManager.SetStartup(_engine.Settings.StartWithWindows);
     }
 
     #region Drag and Drop AutoHotkey (.ahk) Conversion

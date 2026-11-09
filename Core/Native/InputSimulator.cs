@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using MacroMaster.Core.Models;
@@ -7,6 +8,11 @@ namespace MacroMaster.Core.Native;
 public class InputSimulator : IDisposable
 {
     private bool _multimediaTimerActive = false;
+
+    // Inputs this simulator pressed and hasn't released yet, so ReleaseAllInputs can let go of
+    // exactly those (instead of sending stray "up" events for buttons the user is holding)
+    private readonly ConcurrentDictionary<ushort, byte> _heldKeys = new();
+    private readonly ConcurrentDictionary<MouseButtonType, byte> _heldMouseButtons = new();
 
     public InputSimulator()
     {
@@ -21,6 +27,7 @@ public class InputSimulator : IDisposable
     {
         int vk = KeyHelper.NormalizeToVk(key);
         if (vk == 0) return;
+        _heldKeys[(ushort)vk] = 0;
         SendKeyboardInput((ushort)vk, false);
     }
 
@@ -29,6 +36,7 @@ public class InputSimulator : IDisposable
         int vk = KeyHelper.NormalizeToVk(key);
         if (vk == 0) return;
         SendKeyboardInput((ushort)vk, true);
+        _heldKeys.TryRemove((ushort)vk, out _);
     }
 
     public void KeyTap(string key, int holdDurationMs = 25)
@@ -57,6 +65,7 @@ public class InputSimulator : IDisposable
             _ => 0
         };
 
+        _heldMouseButtons[button] = 0;
         Win32Api.mouse_event(flag, 0, 0, data, UIntPtr.Zero);
     }
 
@@ -80,6 +89,7 @@ public class InputSimulator : IDisposable
         };
 
         Win32Api.mouse_event(flag, 0, 0, data, UIntPtr.Zero);
+        _heldMouseButtons.TryRemove(button, out _);
     }
 
     public void MouseClick(MouseButtonType button, int holdDurationMs = 20)
@@ -122,17 +132,19 @@ public class InputSimulator : IDisposable
         }
     }
 
+    /// <summary>Releases every key and mouse button this simulator is still holding down.</summary>
     public void ReleaseAllInputs()
     {
-        // Release common mouse buttons
-        MouseUp(MouseButtonType.Left);
-        MouseUp(MouseButtonType.Right);
-        MouseUp(MouseButtonType.Middle);
+        foreach (var button in _heldMouseButtons.Keys)
+        {
+            MouseUp(button);
+        }
 
-        // Release common modifier keys
-        SendKeyboardInput(0x10, true); // Shift
-        SendKeyboardInput(0x11, true); // Ctrl
-        SendKeyboardInput(0x12, true); // Alt
+        foreach (var vk in _heldKeys.Keys)
+        {
+            SendKeyboardInput(vk, true);
+            _heldKeys.TryRemove(vk, out _);
+        }
     }
 
     private static void SendKeyboardInput(ushort vkCode, bool isKeyUp)
@@ -156,25 +168,90 @@ public class InputSimulator : IDisposable
         Win32Api.SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Win32Api.INPUT)));
     }
 
-    public static void PreciseSleep(int milliseconds)
+    #region High-Resolution Waitable Timer
+
+    private const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002;
+    private const uint TIMER_ALL_ACCESS = 0x1F0003;
+    private const uint INFINITE = 0xFFFFFFFF;
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateWaitableTimerExW(IntPtr lpTimerAttributes, string? lpTimerName, uint dwFlags, uint dwDesiredAccess);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetWaitableTimer(IntPtr hTimer, ref long pDueTime, int lPeriod, IntPtr pfnCompletionRoutine, IntPtr lpArgToCompletionRoutine, bool fResume);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForSingleObject(IntPtr hHandle, uint dwMilliseconds);
+
+    [DllImport("kernel32.dll")]
+    private static extern uint WaitForMultipleObjects(uint nCount, IntPtr[] lpHandles, bool bWaitAll, uint dwMilliseconds);
+
+    // One timer per thread (macro tasks run on thread-pool threads, which are reused)
+    [ThreadStatic] private static IntPtr t_timer;
+    [ThreadStatic] private static bool t_timerUnavailable;
+
+    /// <summary>
+    /// Blocks for ~<paramref name="milliseconds"/> using a high-resolution waitable timer
+    /// (Windows 10 1803+). Unlike Thread.Sleep it isn't quantised to the 15.6 ms system tick, which
+    /// Windows 11 restores for background/minimised processes even after timeBeginPeriod(1).
+    /// Returns false if the timer isn't available.
+    /// </summary>
+    private static bool HighResolutionWait(int milliseconds, CancellationToken token)
     {
-        if (milliseconds <= 0) return;
+        if (t_timerUnavailable) return false;
+        if (t_timer == IntPtr.Zero)
+        {
+            t_timer = CreateWaitableTimerExW(IntPtr.Zero, null, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
+            if (t_timer == IntPtr.Zero)
+            {
+                t_timerUnavailable = true;
+                return false;
+            }
+        }
+
+        long dueTime = -milliseconds * 10_000L; // negative = relative, in 100 ns units
+        if (!SetWaitableTimer(t_timer, ref dueTime, 0, IntPtr.Zero, IntPtr.Zero, false)) return false;
+
+        if (token.CanBeCanceled)
+        {
+            var handles = new[] { t_timer, token.WaitHandle.SafeWaitHandle.DangerousGetHandle() };
+            WaitForMultipleObjects(2, handles, false, INFINITE);
+        }
+        else
+        {
+            WaitForSingleObject(t_timer, INFINITE);
+        }
+        return true;
+    }
+
+    #endregion
+
+    public static void PreciseSleep(int milliseconds) => PreciseSleep(milliseconds, CancellationToken.None);
+
+    /// <summary>
+    /// Precise delay: sleeps on a high-resolution timer for all but the last ~1 ms, then spin-waits
+    /// the remainder. Returns early if <paramref name="token"/> is cancelled.
+    /// </summary>
+    public static void PreciseSleep(int milliseconds, CancellationToken token)
+    {
+        if (milliseconds <= 0 || token.IsCancellationRequested) return;
 
         var sw = Stopwatch.StartNew();
         long targetTicks = (long)(milliseconds * (Stopwatch.Frequency / 1000.0));
 
-        if (milliseconds > 15)
+        int coarseMs = milliseconds - 1;
+        if (coarseMs > 0 && !HighResolutionWait(coarseMs, token))
         {
-            // Thread.Sleep for the coarse portion (leaving ~2ms for precision spin)
-            int sleepTime = milliseconds - 2;
-            if (sleepTime > 0)
+            // Fallback: coarse Thread.Sleep only where 15.6 ms tick granularity can't overshoot
+            if (milliseconds > 15)
             {
-                Thread.Sleep(sleepTime);
+                if (token.CanBeCanceled) token.WaitHandle.WaitOne(milliseconds - 2);
+                else Thread.Sleep(milliseconds - 2);
             }
         }
 
         // High precision spin-wait for the fine portion
-        while (sw.ElapsedTicks < targetTicks)
+        while (sw.ElapsedTicks < targetTicks && !token.IsCancellationRequested)
         {
             Thread.SpinWait(20);
         }

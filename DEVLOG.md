@@ -93,9 +93,26 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
   - Designed and generated a multi-resolution `.ico` icon (`256x256`, `128x128`, `64x64`, `48x48`, `32x32`, `16x16`) featuring the signature Lucide `zap` lightning bolt with neon emerald glow on a deep obsidian squircle.
   - Configured `<ApplicationIcon>` in [`MacroMaster.csproj`](file:///C:/Users/Levi/Desktop/MacroMaster/MacroMaster.csproj), bound window icons across all dialogs, and integrated it into the system tray manager.
 
-### Version 2.2.1
-- **System Tray & Taskbar Icon Prominence Enhancement**:
-  - Maximized squircle usable area by reducing transparent outer padding from 80px (16% wasted canvas) to **18px** (~97% canvas coverage).
-  - Scaled up the Lucide `zap` lightning bolt geometry by **+38%** (`scale = 36.5`), enlarged stroke to 14px, and boosted multi-tier ambient emerald glows for brilliant visibility.
-  - Added dedicated pre-resampled **`20x20` (125% DPI)** and **`24x24` (150% DPI)** raster frames to the multi-resolution `.ico` asset.
-  - Upgraded `TrayManager.cs` to request `SystemInformation.SmallIconSize`, ensuring pixel-perfect native DPI scaling and matching the prominent size of standard Windows tray icons.
+### Version 2.2.2 - Windows Registry Autostart Subsystem & Silent Background Launch (2026-09-20)
+- **Windows Autostart Registration Engine (`Core/Native/AutoStartManager.cs`)**:
+  - Implemented full Windows Registry integration (`HKCU\Software\Microsoft\Windows\CurrentVersion\Run\MacroMaster`).
+  - Added dynamic executable path detection via `GetExecutablePath()` with multi-level parent directory searching.
+  - Added self-healing `SyncStartupRegistration()` on startup and setting changes to heal path mismatches when directories move.
+- **Silent Background Launch Support (`--autostart`)**:
+  - Added command-line parameter parsing in `MainWindow.xaml.cs` (`--autostart`, `-silent`, `-minimized`).
+  - When Windows starts at boot, MacroMaster launches silently to the system tray without showing the main configuration window, while keeping the HUD overlay and hotkeys ready.
+### Version 2.2.3 - Engine Reliability & Trigger Fixes (2026-11-04)
+- **Runaway toggle macros fixed (`Core/Engine/MacroEngine.cs`)**: toggling a macro off and quickly on again let the old run's `finally` remove the *new* run from `_runningTasks`. That loop then kept running untracked: the next press started a second copy, and neither the toggle nor the F12 killswitch could stop it. Runs now only unregister themselves.
+- **Killswitch now stops Once/Repeat macros**: they ran with `CancellationToken.None` and weren't registered, so a long repeat couldn't be halted. They're registered and cancellable now. Delays, loop delays and the auto-clicker/Minecraft loops wake up immediately on cancel instead of finishing their sleep.
+- **"Once" mode ran N times** if a repeat count had been set before switching the mode back to Once. `RepeatCount` is now only used in Repeat mode.
+- **Ctrl/Shift/Alt-modified triggers never fired**: low-level hooks report modifiers as left/right codes (0xA0–0xA5) but the engine checked the generic 0x10–0x12. `IsKeyDown` now maps generic to both sides, a modifier used as the primary trigger key matches either side, and `RequireWin` is checked as well.
+- **Mouse-button triggers never fired / arrow keys hijacked clicks**: the editor saves mouse triggers as "Mouse 4" / "Left Click", but the engine compared against enum names ("XButton1", "Left"), so captured mouse triggers never matched. A *keyboard* trigger on the Left/Right arrow ("Left") also matched the left/right mouse button and swallowed every click. Matching now goes through virtual-key codes, and mouse triggers honour modifiers/chords like keyboard ones.
+- **Mouse hook reacted to its own clicks**: injected events (auto clicker, macro actions) are ignored like the keyboard hook already did, so a mouse-bound macro can't re-trigger itself.
+- **Held hotkeys no longer flip toggles on auto-repeat**: key auto-repeat doesn't re-fire handlers. Repeats and key-ups of a swallowed trigger are swallowed too, as is the release of a swallowed mouse button, so apps don't get orphaned key-up/button-up events.
+- **Chord state can't be corrupted by our own input**: only physical keys are tracked as "held".
+- **Killswitch / stop releases only what macros pressed**: `ReleaseAllInputs` used to send mouse-up and Shift/Ctrl/Alt-up unconditionally, which could cancel a button the user was physically holding while leaving keys pressed via `KeyDown` actions (and X buttons) stuck. The simulator now tracks held keys/buttons and releases exactly those.
+- **Lower CPU, more accurate timing (`Core/Native/InputSimulator.cs`)**: `PreciseSleep` busy-spun the whole wait for anything ≤ 15 ms (a full core at high CPS) and could overshoot by a tick above that. It now waits on a high-resolution waitable timer and only spins the last ~1 ms. This also keeps working when Windows 11 ignores `timeBeginPeriod` for background/minimised apps.
+- **Faster hook callbacks**: the process-filter lookup ran for every enabled macro on every keystroke *before* checking whether the key even matched. Key matching now comes first, the foreground process name is cached per PID, key-name parsing is cached, and mouse moves skip struct marshaling.
+- **HUD no longer steals focus**: the overlay window is `ShowActivated="False"`, and notifications are posted with `BeginInvoke` so the input hook returns immediately.
+- `Engine_OnStateRefreshed` uses `BeginInvoke` so macro worker threads don't block on the UI thread.
+- Autostart entry is compared exactly, so an old entry without `--autostart` gets upgraded.
