@@ -2,137 +2,158 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using MacroMaster.Core.Models;
+using Color = System.Windows.Media.Color;
+using ColorConverter = System.Windows.Media.ColorConverter;
 
 namespace MacroMaster.UI.Windows;
 
+/// <summary>
+/// Small on-screen notification ("Wellskate armed", "Everything stopped", ...).
+/// Never takes focus and shows on the monitor you're playing on.
+///
+/// It is deliberately a normal, opaque window: WPF renders any layered/transparent window with
+/// per-pixel alpha, which turns off ClearType and made the old popups look fuzzy. The trade-off is
+/// that it can't be click-through, so it gets out of the way as soon as the mouse touches it.
+/// Windows' own show/hide animation provides the fade.
+/// </summary>
 public partial class HudOverlayWindow : Window
 {
+    private const int EdgeMarginDip = 28;
+
     private readonly DispatcherTimer _hideTimer = new();
-    private Storyboard? _showAnim;
-    private Storyboard? _hideAnim;
+    private IntPtr _hwnd;
 
     public HudOverlayWindow()
     {
         InitializeComponent();
 
-        _hideTimer.Interval = TimeSpan.FromMilliseconds(2200);
-        _hideTimer.Tick += (s, e) =>
+        _hideTimer.Tick += (_, _) =>
         {
             _hideTimer.Stop();
-            HideHud();
+            Hide();
         };
 
-        SourceInitialized += (s, e) =>
+        // Never sit under the cursor: vanish the moment the mouse reaches it
+        MouseEnter += (_, _) =>
         {
-            SetWindowExTransparent();
-            _showAnim = (Storyboard)FindResource("ShowNotificationAnim");
-            _hideAnim = (Storyboard)FindResource("HideNotificationAnim");
-            if (_hideAnim != null)
-            {
-                _hideAnim.Completed += (s2, e2) => Visibility = Visibility.Hidden;
-            }
+            _hideTimer.Stop();
+            Hide();
+        };
+
+        SourceInitialized += (_, _) =>
+        {
+            _hwnd = new WindowInteropHelper(this).Handle;
+            int ex = GetWindowLong(_hwnd, GWL_EXSTYLE);
+            // Never activated (no focus stealing from the game), not in Alt+Tab
+            SetWindowLong(_hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
+
+            int corner = DWMWCP_ROUND;
+            DwmSetWindowAttribute(_hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref corner, sizeof(int));
+            int border = 0x00433835; // #353843 as 0x00BBGGRR
+            DwmSetWindowAttribute(_hwnd, DWMWA_BORDER_COLOR, ref border, sizeof(int));
         };
     }
 
-    private void SetWindowExTransparent()
-    {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        int extendedStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-        // WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
-        SetWindowLong(hwnd, GWL_EXSTYLE, extendedStyle | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW);
-    }
-
-    public void ShowNotification(string title, string subtitle, string iconKey, string accentColorHex, HudPosition position = HudPosition.TopCenter, int durationMs = 2200)
+    public void ShowNotification(string title, string subtitle, string iconKey, string accentColorHex,
+                                 HudPosition position = HudPosition.TopCenter, int durationMs = 2200)
     {
         // BeginInvoke: this is often called from inside the low-level input hook, which must return fast
         Dispatcher.BeginInvoke(() =>
         {
             HudTitle.Text = title;
             HudSubtitle.Text = subtitle;
-            HudIcon.IconKey = iconKey;
+            HudSubtitle.Visibility = string.IsNullOrWhiteSpace(subtitle) ? Visibility.Collapsed : Visibility.Visible;
 
-            try
-            {
-                var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(accentColorHex);
-                var brush = new SolidColorBrush(color);
-                HudIcon.Foreground = brush;
-                IconBadge.BorderBrush = brush;
-                HudGlow.Color = color;
-            }
-            catch
-            {
-                // Fallback default emerald
-            }
+            bool isLogo = iconKey == "logo";
+            HudLogo.Visibility = isLogo ? Visibility.Visible : Visibility.Collapsed;
+            IconBadge.Visibility = isLogo ? Visibility.Collapsed : Visibility.Visible;
 
-            RepositionWindow(position);
-
-            if (!IsVisible)
+            if (!isLogo)
             {
-                Show();
+                HudIcon.IconKey = iconKey;
+                var accent = ParseColor(accentColorHex);
+                HudIcon.Foreground = new SolidColorBrush(accent);
+                // Solid tint (~16 % accent over the popup background), so text and icon stay ClearType-crisp
+                IconBadge.Background = new SolidColorBrush(Blend(Color.FromRgb(0x1D, 0x1F, 0x26), accent, 0.16));
             }
 
-            Visibility = Visibility.Visible;
+            if (!IsVisible) Show();
+            UpdateLayout();
+            Reposition(position);
+
             _hideTimer.Stop();
-            _hideTimer.Interval = TimeSpan.FromMilliseconds(durationMs);
-
-            _showAnim?.Begin(this);
+            _hideTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(500, durationMs));
             _hideTimer.Start();
         });
     }
 
-    private void HideHud()
+    private static Color ParseColor(string hex)
     {
-        _hideAnim?.Begin(this);
+        try { return (Color)ColorConverter.ConvertFromString(hex); }
+        catch { return Color.FromRgb(0x7C, 0x83, 0xFF); }
     }
 
-    private void RepositionWindow(HudPosition position)
-    {
-        UpdateLayout();
-        double screenW = SystemParameters.PrimaryScreenWidth;
-        double screenH = SystemParameters.PrimaryScreenHeight;
-        double winW = ActualWidth > 0 ? ActualWidth : 340;
-        double winH = ActualHeight > 0 ? ActualHeight : 80;
+    private static Color Blend(Color bg, Color fg, double t) => Color.FromRgb(
+        (byte)(bg.R + (fg.R - bg.R) * t), (byte)(bg.G + (fg.G - bg.G) * t), (byte)(bg.B + (fg.B - bg.B) * t));
 
-        switch (position)
+    #region Placement (physical pixels on the monitor of the foreground window)
+
+    private void Reposition(HudPosition position)
+    {
+        if (_hwnd == IntPtr.Zero) return;
+
+        // Show on the screen the user is looking at (the game), not always the primary one
+        IntPtr fg = GetForegroundWindow();
+        var screen = System.Windows.Forms.Screen.FromHandle(fg != IntPtr.Zero ? fg : _hwnd);
+        var area = screen.WorkingArea;
+
+        // Twice: the first move can land on a monitor with another DPI, which resizes the window
+        for (int pass = 0; pass < 2; pass++)
         {
-            case HudPosition.TopCenter:
-                Left = (screenW - winW) / 2;
-                Top = 30;
-                break;
-            case HudPosition.TopRight:
-                Left = screenW - winW - 30;
-                Top = 30;
-                break;
-            case HudPosition.BottomRight:
-                Left = screenW - winW - 30;
-                Top = screenH - winH - 60;
-                break;
-            case HudPosition.BottomCenter:
-                Left = (screenW - winW) / 2;
-                Top = screenH - winH - 60;
-                break;
-            case HudPosition.TopLeft:
-                Left = 30;
-                Top = 30;
-                break;
+            GetWindowRect(_hwnd, out RECT r);
+            int w = r.Right - r.Left, h = r.Bottom - r.Top;
+            int margin = (int)Math.Round(EdgeMarginDip * GetDpiForWindow(_hwnd) / 96.0);
+
+            int x = position switch
+            {
+                HudPosition.TopLeft => area.Left + margin,
+                HudPosition.TopRight or HudPosition.BottomRight => area.Right - w - margin,
+                _ => area.Left + (area.Width - w) / 2
+            };
+            int y = position is HudPosition.BottomRight or HudPosition.BottomCenter
+                ? area.Bottom - h - margin
+                : area.Top + margin;
+
+            SetWindowPos(_hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
         }
     }
 
-    #region Win32 Constants
+    #endregion
+
+    #region Win32
 
     private const int GWL_EXSTYLE = -20;
-    private const int WS_EX_TRANSPARENT = 0x00000020;
-    private const int WS_EX_NOACTIVATE = 0x08000000;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
+    private const int WS_EX_NOACTIVATE = 0x08000000;
+    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    private const int DWMWA_BORDER_COLOR = 34;
+    private const int DWMWCP_ROUND = 2;
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOACTIVATE = 0x0010;
 
-    [DllImport("user32.dll")]
-    private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
 
-    [DllImport("user32.dll")]
-    private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+    [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
+    [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
+    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
     #endregion
 }

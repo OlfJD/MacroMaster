@@ -39,10 +39,10 @@ public class InputSimulator : IDisposable
         _heldKeys.TryRemove((ushort)vk, out _);
     }
 
-    public void KeyTap(string key, int holdDurationMs = 25)
+    public void KeyTap(string key, int holdDurationMs = 25, CancellationToken token = default)
     {
         KeyDown(key);
-        PreciseSleep(holdDurationMs);
+        PreciseSleep(holdDurationMs, token); // cancellable, so the killswitch can cut a long hold short
         KeyUp(key);
     }
 
@@ -92,10 +92,10 @@ public class InputSimulator : IDisposable
         _heldMouseButtons.TryRemove(button, out _);
     }
 
-    public void MouseClick(MouseButtonType button, int holdDurationMs = 20)
+    public void MouseClick(MouseButtonType button, int holdDurationMs = 20, CancellationToken token = default)
     {
         MouseDown(button);
-        PreciseSleep(holdDurationMs);
+        PreciseSleep(holdDurationMs, token);
         MouseUp(button);
     }
 

@@ -43,15 +43,21 @@ public class TrayManager : IDisposable
 
         _notifyIcon = new NotifyIcon
         {
-            Text = "MacroMaster - Pro Macro Engine",
+            Text = "MacroMaster",
             Visible = true,
             Icon = appIcon ?? SystemIcons.Application
         };
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open MacroMaster", null, (s, e) => _onRestoreWindow());
-        menu.Items.Add("Toggle Master Engine", null, (s, e) => _engine.SetMasterEngineEnabled(!_engine.Settings.MasterEngineEnabled));
-        menu.Items.Add("Emergency Stop (F12)", null, (s, e) => _engine.EmergencyStop());
+        var engineItem = menu.Items.Add("Pause engine", null, (s, e) => _engine.SetMasterEngineEnabled(!_engine.Settings.MasterEngineEnabled));
+        var stopItem = menu.Items.Add("Stop everything", null, (s, e) => _engine.EmergencyStop());
+        // Labels follow the current state and the configured kill-switch key
+        menu.Opening += (s, e) =>
+        {
+            engineItem.Text = _engine.Settings.MasterEngineEnabled ? "Pause engine" : "Resume engine";
+            stopItem.Text = $"Stop everything ({_engine.Settings.EmergencyKillswitchKey})";
+        };
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (s, e) =>
         {

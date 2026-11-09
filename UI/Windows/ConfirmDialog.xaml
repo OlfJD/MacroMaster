@@ -1,0 +1,42 @@
+<Window x:Class="MacroMaster.UI.Windows.ConfirmDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MacroMaster.UI.Controls"
+        Style="{StaticResource AppWindow}"
+        Title="MacroMaster"
+        Width="420" SizeToContent="Height"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid MouseLeftButtonDown="Root_MouseLeftButtonDown" Background="{StaticResource SurfaceBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Grid Margin="24,24,24,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Border x:Name="IconBadge" Width="36" Height="36" CornerRadius="9" Background="{StaticResource AccentSubtleBrush}" VerticalAlignment="Top" Margin="0,0,14,0">
+                <controls:AppIcon x:Name="BadgeIcon" IconKey="shield-alert" Size="20" Foreground="{StaticResource AccentTextBrush}"/>
+            </Border>
+            <StackPanel Grid.Column="1">
+                <TextBlock x:Name="TxtTitle" Text="Are you sure?" Style="{StaticResource H2}" TextWrapping="Wrap"/>
+                <TextBlock x:Name="TxtMessage" Text="" Style="{StaticResource Caption}" FontSize="13" TextWrapping="Wrap" Margin="0,6,0,0" LineHeight="19"/>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="BtnCancel" Style="{StaticResource SecondaryButton}" Content="Cancel" MinWidth="84" Margin="0,0,8,0" IsCancel="True" Click="Cancel_Click"/>
+                <Button x:Name="BtnConfirm" Style="{StaticResource PrimaryButton}" Content="OK" MinWidth="84" IsDefault="True" Click="Confirm_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

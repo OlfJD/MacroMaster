@@ -17,6 +17,8 @@ public class LowLevelMouseHook : IDisposable
     // Only touched on the hook thread, so no locking needed.
     private readonly HashSet<MouseButtonType> _suppressedButtons = new();
 
+    public bool IsInstalled => _hookId != IntPtr.Zero;
+
     public void Install()
     {
         if (_hookId != IntPtr.Zero) return;

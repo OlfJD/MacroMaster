@@ -120,6 +120,15 @@ public class MacroAction : INotifyPropertyChanged
         set { _mediaCommand = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayText)); }
     }
 
+    // Editor-only: this step's key button is waiting for a key press
+    private bool _isCapturingKey;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsCapturingKey
+    {
+        get => _isCapturingKey;
+        set { _isCapturingKey = value; OnPropertyChanged(); }
+    }
+
     public string DisplayText
     {
         get

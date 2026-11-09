@@ -19,6 +19,7 @@ public partial class SettingsDialog : Window
     public SettingsDialog(AppSettings settings)
     {
         InitializeComponent();
+        WindowHelper.Attach(this, RootGrid);
         _settings = settings;
         LoadSettings();
     }
@@ -27,16 +28,6 @@ public partial class SettingsDialog : Window
     {
         // Hotkeys & Triggers
         TxtKillswitch.Text = _settings.EmergencyKillswitchKey;
-        
-        ChkHoldLeftClick.IsChecked = _settings.HoldLeftClickHotkeyEnabled;
-        TxtHoldLeftClick.Text = _settings.HoldLeftClickHotkey;
-
-        ChkAutoClicker.IsChecked = _settings.AutoClickerHotkeyEnabled;
-        TxtAutoClicker.Text = _settings.AutoClickerHotkey;
-        TxtAutoClickerCps.Text = _settings.AutoClickerCps.ToString();
-
-        ChkMinecraftLoop.IsChecked = _settings.MinecraftLoopHotkeyEnabled;
-        TxtMinecraftLoop.Text = _settings.MinecraftLoopHotkey;
 
         // HUD / Overlay
         ChkShowOverlay.IsChecked = _settings.ShowHudOverlay;
@@ -45,15 +36,8 @@ public partial class SettingsDialog : Window
 
         // System
         ChkStartWithWindows.IsChecked = _settings.StartWithWindows;
+        ChkMinimizeToTray.IsChecked = _settings.MinimizeToTray;
         ChkCloseToTray.IsChecked = _settings.CloseToTray;
-    }
-
-    private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-    {
-        if (e.ButtonState == MouseButtonState.Pressed)
-        {
-            DragMove();
-        }
     }
 
     #region Key & Mouse Capture Logic
@@ -61,21 +45,6 @@ public partial class SettingsDialog : Window
     private void BtnCaptureKillswitch_Click(object sender, RoutedEventArgs e)
     {
         ToggleCapture(TxtKillswitch, BtnCaptureKillswitch, allowMouse: false);
-    }
-
-    private void BtnCaptureHoldLeftClick_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleCapture(TxtHoldLeftClick, BtnCaptureHoldLeftClick, allowMouse: true);
-    }
-
-    private void BtnCaptureAutoClicker_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleCapture(TxtAutoClicker, BtnCaptureAutoClicker, allowMouse: true);
-    }
-
-    private void BtnCaptureMinecraftLoop_Click(object sender, RoutedEventArgs e)
-    {
-        ToggleCapture(TxtMinecraftLoop, BtnCaptureMinecraftLoop, allowMouse: true);
     }
 
     private void ToggleCapture(TextBox targetBox, Button targetButton, bool allowMouse)
@@ -96,8 +65,8 @@ public partial class SettingsDialog : Window
 
         _activeCaptureTextBox = targetBox;
         _activeCaptureButton = targetButton;
-        _activeCaptureButton.Content = "Press Key...";
-        _activeCaptureButton.BorderBrush = (System.Windows.Media.Brush)FindResource("NeonEmeraldGlowBrush");
+        _activeCaptureButton.Content = "Press a key…";
+        _activeCaptureButton.BorderBrush = (System.Windows.Media.Brush)FindResource("AccentBrush");
 
         _captureKeyboardHook = new LowLevelKeyboardHook();
         _captureKeyboardHook.OnKeyDown += (vk, isExt) =>
@@ -181,28 +150,6 @@ public partial class SettingsDialog : Window
             _settings.EmergencyKillswitchKey = TxtKillswitch.Text.Trim();
         }
 
-        _settings.HoldLeftClickHotkeyEnabled = ChkHoldLeftClick.IsChecked == true;
-        if (!string.IsNullOrWhiteSpace(TxtHoldLeftClick.Text))
-        {
-            _settings.HoldLeftClickHotkey = TxtHoldLeftClick.Text.Trim();
-        }
-
-        _settings.AutoClickerHotkeyEnabled = ChkAutoClicker.IsChecked == true;
-        if (!string.IsNullOrWhiteSpace(TxtAutoClicker.Text))
-        {
-            _settings.AutoClickerHotkey = TxtAutoClicker.Text.Trim();
-        }
-        if (int.TryParse(TxtAutoClickerCps.Text, out int cps))
-        {
-            _settings.AutoClickerCps = Math.Clamp(cps, 1, 100);
-        }
-
-        _settings.MinecraftLoopHotkeyEnabled = ChkMinecraftLoop.IsChecked == true;
-        if (!string.IsNullOrWhiteSpace(TxtMinecraftLoop.Text))
-        {
-            _settings.MinecraftLoopHotkey = TxtMinecraftLoop.Text.Trim();
-        }
-
         // HUD / Overlay
         _settings.ShowHudOverlay = ChkShowOverlay.IsChecked == true;
         _settings.OverlayPosition = (HudPosition)Math.Max(0, CmbHudPosition.SelectedIndex);
@@ -213,6 +160,7 @@ public partial class SettingsDialog : Window
 
         // System
         _settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;
+        _settings.MinimizeToTray = ChkMinimizeToTray.IsChecked == true;
         _settings.CloseToTray = ChkCloseToTray.IsChecked == true;
 
         DialogResult = true;

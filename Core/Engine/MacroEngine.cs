@@ -7,16 +7,37 @@ namespace MacroMaster.Core.Engine;
 
 public class MacroEngine : IDisposable
 {
+    // HUD accent colours (match the UI theme)
+    private const string Success = "#3DD68C";
+    private const string Muted = "#A3A6B1";
+    private const string Danger = "#F2555A";
+    private const string Warning = "#F5B547";
+    private const string Accent = "#7C83FF";
+
     private readonly LowLevelKeyboardHook _keyboardHook = new();
     private readonly LowLevelMouseHook _mouseHook = new();
     private readonly InputSimulator _simulator = new();
 
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningTasks = new();
-    private readonly object _stateLock = new();
+    // Run-once / repeat macros currently executing, so a second press can't start an overlapping copy
+    private readonly ConcurrentDictionary<string, byte> _singleRuns = new();
+
+    private InputHookThread? _hookThread;
+
+    /// <summary>
+    /// Read-only copy of the profile/macro lists for the hook thread. The UI edits the real
+    /// ObservableCollections; enumerating those from another thread mid-edit would throw, so any
+    /// change to them swaps in a fresh snapshot instead. (Per-macro flags such as IsEnabled are
+    /// still read live from the shared objects.)
+    /// </summary>
+    private volatile ProfileSnapshot[] _snapshot = Array.Empty<ProfileSnapshot>();
+    private sealed record ProfileSnapshot(MacroProfile Profile, MacroDefinition[] Macros);
 
     public AppSettings Settings { get; set; } = new();
     public ObservableCollection<MacroProfile> Profiles { get; set; } = new();
-    public MacroProfile? ActiveProfile => Profiles.FirstOrDefault(p => p.IsActive) ?? Profiles.FirstOrDefault();
+
+    /// <summary>The profile shown in the main window. Which profiles actually fire is <see cref="MacroProfile.IsOn"/>.</summary>
+    public MacroProfile? SelectedProfile => Profiles.FirstOrDefault(p => p.IsActive) ?? Profiles.FirstOrDefault();
 
     // Events for UI & HUD
     public event Action<string, string, string, string>? OnHudNotification; // title, subtitle, iconKey, accentColor
@@ -29,12 +50,28 @@ public class MacroEngine : IDisposable
         Settings = settings;
         Profiles = new ObservableCollection<MacroProfile>(profiles);
 
+        Profiles.CollectionChanged += (_, e) =>
+        {
+            if (e.NewItems != null) foreach (MacroProfile p in e.NewItems) p.Macros.CollectionChanged += (_, _) => RebuildSnapshot();
+            RebuildSnapshot();
+        };
+        foreach (var p in Profiles) p.Macros.CollectionChanged += (_, _) => RebuildSnapshot();
+        RebuildSnapshot();
+
         _keyboardHook.OnKeyDown += HandleKeyDown;
         _keyboardHook.OnKeyUp += HandleKeyUp;
         _mouseHook.OnMouseEvent += HandleMouseEvent;
 
-        _keyboardHook.Install();
-        _mouseHook.Install();
+        _hookThread = new InputHookThread(_keyboardHook, _mouseHook);
+        _hookThread.Start();
+    }
+
+    /// <summary>True when both global hooks are installed, i.e. hotkeys can work at all.</summary>
+    public bool HooksActive => _keyboardHook.IsInstalled && _mouseHook.IsInstalled;
+
+    private void RebuildSnapshot()
+    {
+        _snapshot = Profiles.Select(p => new ProfileSnapshot(p, p.Macros.ToArray())).ToArray();
     }
 
     public void SetMasterEngineEnabled(bool enabled)
@@ -44,127 +81,58 @@ public class MacroEngine : IDisposable
         {
             StopAllRunningMacros();
             _simulator.ReleaseAllInputs();
-            TriggerHud("ENGINE PAUSED", "All macros and triggers disabled", "pause", "#F87171");
+            TriggerHud("Engine paused", "Hotkeys are ignored until you resume", "pause", Muted);
         }
         else
         {
-            TriggerHud("ENGINE ACTIVE", "Macros ready to trigger", "zap", "#34D399");
+            TriggerHud("Engine running", "Hotkeys are live", "power", Success);
         }
         OnStateRefreshed?.Invoke();
     }
 
-    #region Quick Actions
-
-    public void ToggleHoldLeftClick(bool? explicitState = null)
+    /// <summary>Turns a whole profile's hotkeys on or off. Each macro keeps its own switch. Returns false if nothing changed.</summary>
+    public bool SetProfileOn(MacroProfile profile, bool on)
     {
-        lock (_stateLock)
-        {
-            bool newState = explicitState ?? !Settings.HoldLeftClickActive;
-            Settings.HoldLeftClickActive = newState;
+        if (profile.IsOn == on) return false;
+        profile.IsOn = on;
 
-            if (newState)
+        if (!on)
+        {
+            // Stop anything this profile still has looping, so turning it off really silences it
+            foreach (var m in profile.Macros.Where(m => _runningTasks.ContainsKey(m.Id)))
             {
-                _simulator.MouseDown(MouseButtonType.Left);
-                TriggerHud("LEFT CLICK: HELD", "Mouse button locked down", "mouse", "#34D399");
+                StopTask(m.Id);
+                m.IsRunning = false;
             }
-            else
-            {
-                _simulator.MouseUp(MouseButtonType.Left);
-                TriggerHud("LEFT CLICK: RELEASED", "Mouse button unlocked", "mouse", "#94A3B8");
-            }
+            _simulator.ReleaseAllInputs();
         }
+
+        TriggerHud(on ? $"{profile.Name} on" : $"{profile.Name} off",
+                   on ? $"{profile.Macros.Count(m => m.IsEnabled)} macros ready" : "Its hotkeys are ignored",
+                   "logo", on ? Accent : Muted);
         OnStateRefreshed?.Invoke();
+        return true;
     }
-
-    public void ToggleAutoClicker(bool? explicitState = null)
-    {
-        lock (_stateLock)
-        {
-            bool newState = explicitState ?? !Settings.AutoClickerActive;
-            Settings.AutoClickerActive = newState;
-
-            if (newState)
-            {
-                StartAutoClickerLoop();
-                TriggerHud("AUTO CLICKER: ON", $"{Settings.AutoClickerCps} CPS ({Settings.AutoClickerButton})", "zap", "#38BDF8");
-            }
-            else
-            {
-                StopTask("QuickAction_AutoClicker");
-                _simulator.MouseUp(Settings.AutoClickerButton);
-                TriggerHud("AUTO CLICKER: OFF", "Spamming stopped", "zap", "#94A3B8");
-            }
-        }
-        OnStateRefreshed?.Invoke();
-    }
-
-    private void StartAutoClickerLoop()
-    {
-        StopTask("QuickAction_AutoClicker");
-        var cts = new CancellationTokenSource();
-        _runningTasks["QuickAction_AutoClicker"] = cts;
-
-        Task.Run(() =>
-        {
-            int intervalMs = Math.Max(1, 1000 / Math.Max(1, Settings.AutoClickerCps));
-            while (!cts.Token.IsCancellationRequested)
-            {
-                _simulator.MouseClick(Settings.AutoClickerButton, Math.Min(10, intervalMs / 2));
-                int waitMs = Math.Max(1, intervalMs - Math.Min(10, intervalMs / 2));
-                InputSimulator.PreciseSleep(waitMs, cts.Token);
-            }
-        }, cts.Token);
-    }
-
-    public void ToggleMinecraftLoop(bool? explicitState = null)
-    {
-        lock (_stateLock)
-        {
-            bool newState = explicitState ?? !Settings.MinecraftLoopActive;
-            Settings.MinecraftLoopActive = newState;
-
-            if (newState)
-            {
-                StartMinecraftMiningLoop();
-                TriggerHud("MINECRAFT: MINING", "Left Hold + Right Click Spam active", "crosshair", "#FBBF24");
-            }
-            else
-            {
-                StopTask("QuickAction_Minecraft");
-                _simulator.MouseUp(MouseButtonType.Left);
-                TriggerHud("MINECRAFT: STOPPED", "Mining loop stopped", "crosshair", "#94A3B8");
-            }
-        }
-        OnStateRefreshed?.Invoke();
-    }
-
-    private void StartMinecraftMiningLoop()
-    {
-        StopTask("QuickAction_Minecraft");
-        var cts = new CancellationTokenSource();
-        _runningTasks["QuickAction_Minecraft"] = cts;
-
-        Task.Run(() =>
-        {
-            _simulator.MouseDown(MouseButtonType.Left);
-            while (!cts.Token.IsCancellationRequested)
-            {
-                _simulator.MouseClick(MouseButtonType.Right, 20);
-                InputSimulator.PreciseSleep(100, cts.Token);
-            }
-            _simulator.MouseUp(MouseButtonType.Left);
-        }, cts.Token);
-    }
-
-    #endregion
 
     #region Hook Handling
 
+    /// <summary>Profiles whose hotkeys are live right now (switched on, and their app is in front if they have one).</summary>
+    private IEnumerable<ProfileSnapshot> LiveProfiles()
+    {
+        foreach (var s in _snapshot)
+        {
+            var p = s.Profile;
+            if (!p.IsOn) continue;
+            var targets = p.TargetProcesses;
+            if (targets.Count > 0 && !targets.Any(ProcessWatcher.IsProcessActive)) continue;
+            yield return s;
+        }
+    }
+
     private bool HandleKeyDown(int vkCode, bool isExtended)
     {
-        // 1. Emergency Killswitch (default F12)
-        int killswitchVk = KeyHelper.NormalizeToVk(Settings.EmergencyKillswitchKey);
-        if (vkCode == killswitchVk)
+        // 1. Emergency killswitch works even when the engine is paused
+        if (vkCode == KeyHelper.NormalizeToVk(Settings.EmergencyKillswitchKey))
         {
             EmergencyStop();
             return true;
@@ -172,69 +140,42 @@ public class MacroEngine : IDisposable
 
         if (!Settings.MasterEngineEnabled) return false;
 
-        // 2. Check Quick Action Hotkeys
-        if (Settings.HoldLeftClickHotkeyEnabled && vkCode == KeyHelper.NormalizeToVk(Settings.HoldLeftClickHotkey))
+        foreach (var profile in LiveProfiles())
         {
-            // Only trigger if no other modifier conflict
-            ToggleHoldLeftClick();
-            return true;
-        }
-
-        if (Settings.AutoClickerHotkeyEnabled && vkCode == KeyHelper.NormalizeToVk(Settings.AutoClickerHotkey))
-        {
-            ToggleAutoClicker();
-            return true;
-        }
-
-        if (Settings.MinecraftLoopHotkeyEnabled && vkCode == KeyHelper.NormalizeToVk(Settings.MinecraftLoopHotkey))
-        {
-            ToggleMinecraftLoop();
-            return true;
-        }
-
-        // 3. Check Mode Arming Keys (e.g. PgUp arms Wellskate, PgDn arms Groundskate)
-        if (ActiveProfile != null)
-        {
-            foreach (var macro in ActiveProfile.Macros.Where(m => m.IsEnabled && m.RequiresArming && !string.IsNullOrWhiteSpace(m.ArmingKey)))
+            // 2. Mode arming keys (e.g. PgUp arms Wellskate, PgDn arms Groundskate)
+            foreach (var macro in profile.Macros)
             {
-                int armingVk = KeyHelper.NormalizeToVk(macro.ArmingKey);
-                if (vkCode == armingVk)
+                if (!macro.IsEnabled || !macro.RequiresArming || string.IsNullOrWhiteSpace(macro.ArmingKey)) continue;
+                if (vkCode != KeyHelper.NormalizeToVk(macro.ArmingKey)) continue;
+
+                foreach (var other in profile.Macros)
                 {
-                    // Disarm other macros in the same arming group
-                    foreach (var other in ActiveProfile.Macros.Where(m => m.RequiresArming && m.ArmingGroupName == macro.ArmingGroupName))
-                    {
-                        other.IsCurrentlyArmed = (other.Id == macro.Id);
-                    }
-
-                    TriggerHud($"ARMED: {macro.ArmingDisplayName}", $"Switched via {macro.ArmingKey.ToUpperInvariant()}", "rocket", "#34D399");
-                    OnStateRefreshed?.Invoke();
-                    return false; // Let key pass through if needed, or suppress
+                    if (other.RequiresArming && other.ArmingGroupName == macro.ArmingGroupName)
+                        other.IsCurrentlyArmed = other.Id == macro.Id;
                 }
-            }
-        }
 
-        // 4. Check Macro Triggers
-        if (ActiveProfile != null)
-        {
-            foreach (var macro in ActiveProfile.Macros.Where(m => m.IsEnabled))
+                TriggerHud($"Armed: {macro.ArmingDisplayName}", $"Switched with {macro.ArmingKey.ToUpperInvariant()}", "circle-dot", Warning);
+                OnStateRefreshed?.Invoke();
+                return false; // the arming key still reaches the game
+            }
+
+            // 3. Macro triggers
+            foreach (var macro in profile.Macros)
             {
+                if (!macro.IsEnabled) continue;
                 // Cheap checks first: this runs inside the low-level hook for every keystroke
                 if (!KeyMatches(vkCode, KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey))) continue;
                 if (!TriggerConditionsMet(macro)) continue;
 
-                // All trigger conditions met!
                 ExecuteMacro(macro);
-                return true; // Suppress trigger key
+                return true; // swallow the trigger key
             }
         }
 
         return false;
     }
 
-    private bool HandleKeyUp(int vkCode, bool isExtended)
-    {
-        return false;
-    }
+    private bool HandleKeyUp(int vkCode, bool isExtended) => false;
 
     /// <summary>Low-level hooks report left/right modifier codes; match them against generic ones.</summary>
     private static bool KeyMatches(int vkCode, int targetVk)
@@ -261,7 +202,6 @@ public class MacroEngine : IDisposable
         if (macro.Trigger.RequireAlt && !_keyboardHook.IsKeyDown(0x12)) return false;
         if (macro.Trigger.RequireWin && !_keyboardHook.IsKeyDown(0x5B)) return false;
 
-        // Chord keys (e.g. "ä", "ö")
         foreach (var chord in macro.Trigger.ChordKeys)
         {
             int chordVk = KeyHelper.NormalizeToVk(chord);
@@ -289,10 +229,11 @@ public class MacroEngine : IDisposable
         // comparing to the enum name ("Left") also matched the Left *arrow* key and hijacked clicks
         int buttonVk = MouseButtonToVk(button);
 
-        if (ActiveProfile != null)
+        foreach (var profile in LiveProfiles())
         {
-            foreach (var macro in ActiveProfile.Macros.Where(m => m.IsEnabled))
+            foreach (var macro in profile.Macros)
             {
+                if (!macro.IsEnabled) continue;
                 if (KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey) != buttonVk) continue;
                 if (!TriggerConditionsMet(macro)) continue;
 
@@ -317,13 +258,13 @@ public class MacroEngine : IDisposable
                 StopTask(macro.Id);
                 macro.IsRunning = false;
                 _simulator.ReleaseAllInputs();
-                TriggerHud($"STOPPED: {macro.Name}", "Toggle deactivated", "pause", "#94A3B8");
+                TriggerHud(macro.Name, "Stopped", "square", Muted);
                 OnStateRefreshed?.Invoke();
                 return;
             }
 
             macro.IsRunning = true;
-            TriggerHud($"RUNNING: {macro.Name}", "Toggle active", "play", "#34D399");
+            TriggerHud(macro.Name, "Looping — press again to stop", "repeat", Success);
             OnStateRefreshed?.Invoke();
 
             var cts = new CancellationTokenSource();
@@ -358,8 +299,12 @@ public class MacroEngine : IDisposable
         }
         else
         {
-            // Execute Once or Repeat N Times
-            TriggerHud($"TRIGGERED: {macro.Name}", macro.Category, "zap", "#A78BFA");
+            // Pressing the trigger again while this macro is still playing would start a second copy
+            // interleaved with the first (key downs/ups crossing, keys left stuck), so ignore it.
+            // The trigger key is still swallowed by the caller, so the game doesn't see it either.
+            if (!_singleRuns.TryAdd(macro.Id, 0)) return;
+
+            TriggerHud(macro.Name, macro.Mode == ExecutionMode.RepeatCount ? $"Running ×{Math.Max(1, macro.RepeatCount)}" : "Running", "play", Accent);
 
             // Registered under a unique key so EmergencyStop can cancel long repeat runs too
             string runKey = $"{macro.Id}#run#{Guid.NewGuid():N}";
@@ -384,6 +329,7 @@ public class MacroEngine : IDisposable
                 finally
                 {
                     _runningTasks.TryRemove(runKey, out _);
+                    _singleRuns.TryRemove(macro.Id, out _);
                 }
             });
         }
@@ -404,7 +350,7 @@ public class MacroEngine : IDisposable
                     _simulator.KeyUp(action.Key);
                     break;
                 case ActionType.KeyTap:
-                    _simulator.KeyTap(action.Key, Math.Max(1, action.DelayMs));
+                    _simulator.KeyTap(action.Key, Math.Max(1, action.DelayMs), token);
                     break;
                 case ActionType.MouseDown:
                     _simulator.MouseDown(action.MouseButton);
@@ -413,7 +359,7 @@ public class MacroEngine : IDisposable
                     _simulator.MouseUp(action.MouseButton);
                     break;
                 case ActionType.MouseClick:
-                    _simulator.MouseClick(action.MouseButton, Math.Max(1, action.DelayMs));
+                    _simulator.MouseClick(action.MouseButton, Math.Max(1, action.DelayMs), token);
                     break;
                 case ActionType.MouseMoveRelative:
                     _simulator.MouseMoveRelative(action.MoveX, action.MoveY);
@@ -442,11 +388,7 @@ public class MacroEngine : IDisposable
         StopAllRunningMacros();
         _simulator.ReleaseAllInputs();
 
-        Settings.HoldLeftClickActive = false;
-        Settings.AutoClickerActive = false;
-        Settings.MinecraftLoopActive = false;
-
-        TriggerHud("KILLSWITCH ACTIVATED", "All macros halted & inputs released", "shield-alert", "#EF4444");
+        TriggerHud("Everything stopped", "All macros halted and inputs released", "octagon-x", Danger);
         OnStateRefreshed?.Invoke();
     }
 
@@ -458,12 +400,10 @@ public class MacroEngine : IDisposable
         }
         _runningTasks.Clear();
 
-        if (ActiveProfile != null)
+        // Snapshot, not Profiles: this also runs on the hook thread (kill switch)
+        foreach (var m in _snapshot.SelectMany(s => s.Macros))
         {
-            foreach (var m in ActiveProfile.Macros)
-            {
-                m.IsRunning = false;
-            }
+            m.IsRunning = false;
         }
     }
 
@@ -488,6 +428,8 @@ public class MacroEngine : IDisposable
     public void Dispose()
     {
         StopAllRunningMacros();
+        _hookThread?.Dispose();   // ends the message loop, which uninstalls both hooks on their thread
+        _hookThread = null;
         _keyboardHook.Dispose();
         _mouseHook.Dispose();
         _simulator.Dispose();

@@ -17,6 +17,8 @@ public class LowLevelKeyboardHook : IDisposable
     private readonly HashSet<int> _suppressedVkCodes = new();
     private readonly object _lock = new();
 
+    public bool IsInstalled => _hookId != IntPtr.Zero;
+
     public IReadOnlySet<int> PressedKeys
     {
         get

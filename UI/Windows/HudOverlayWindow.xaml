@@ -4,94 +4,41 @@
         xmlns:controls="clr-namespace:MacroMaster.UI.Controls"
         Title="MacroMaster HUD"
         WindowStyle="None"
-        AllowsTransparency="True"
-        Background="Transparent"
+        AllowsTransparency="False"
+        ResizeMode="NoResize"
+        Background="{StaticResource RaisedBrush}"
         Topmost="True"
         ShowActivated="False"
         Focusable="False"
         ShowInTaskbar="False"
         SizeToContent="WidthAndHeight"
-        ResizeMode="NoResize"
+        FontFamily="{StaticResource UiFont}"
+        UseLayoutRounding="True"
         SnapsToDevicePixels="True"
-        UseLayoutRounding="True">
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType">
 
-    <Window.Resources>
-        <Storyboard x:Key="ShowNotificationAnim">
-            <!-- Fade In -->
-            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="0.0" To="1.0" Duration="0:0:0.18">
-                <DoubleAnimation.EasingFunction>
-                    <CubicEase EasingMode="EaseOut"/>
-                </DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-            <!-- Slide Down -->
-            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                             From="-12" To="0" Duration="0:0:0.18">
-                <DoubleAnimation.EasingFunction>
-                    <CubicEase EasingMode="EaseOut"/>
-                </DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-        </Storyboard>
+    <!-- Solid (non-transparent) window on purpose: transparent WPF windows can't use ClearType,
+         which is what made the old popups look fuzzy. Fading and click-through are done with
+         Win32 window styles in code instead. Corners and the 1px frame come from DWM. -->
+    <Grid Margin="12,10,20,10" MinWidth="200" MaxWidth="420">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
 
-        <Storyboard x:Key="HideNotificationAnim">
-            <!-- Fade Out -->
-            <DoubleAnimation Storyboard.TargetProperty="Opacity" From="1.0" To="0.0" Duration="0:0:0.25">
-                <DoubleAnimation.EasingFunction>
-                    <CubicEase EasingMode="EaseIn"/>
-                </DoubleAnimation.EasingFunction>
-            </DoubleAnimation>
-        </Storyboard>
-    </Window.Resources>
-
-    <Window.RenderTransform>
-        <TranslateTransform Y="0"/>
-    </Window.RenderTransform>
-
-    <Grid Margin="20">
-        <!-- Floating Glass Banner / Pill Container -->
-        <Border x:Name="HudPillBorder"
-                Background="#10131C"
-                BorderBrush="#252D3E"
-                BorderThickness="1"
-                CornerRadius="16"
-                Padding="16,10">
-            <Border.Effect>
-                <DropShadowEffect x:Name="HudGlow" BlurRadius="22" Color="#10B981" Opacity="0.35" ShadowDepth="4" Direction="270"/>
-            </Border.Effect>
-
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <!-- Lucide Vector Icon Container with dynamic accent background -->
-                <Border x:Name="IconBadge"
-                        Width="34" Height="34"
-                        CornerRadius="10"
-                        Background="#192524"
-                        BorderBrush="#10B981"
-                        BorderThickness="1"
-                        Margin="0,0,12,0"
-                        VerticalAlignment="Center">
-                    <controls:LucideIcon x:Name="HudIcon"
-                                         IconKey="rocket"
-                                         Foreground="#34D399"
-                                         Size="18"
-                                         StrokeThickness="2.2"
-                                         HorizontalAlignment="Center"
-                                         VerticalAlignment="Center"/>
-                </Border>
-
-                <!-- Text Details -->
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock x:Name="HudTitle"
-                               Text="ARMED: Wellskate (PgUp Mode)"
-                               FontSize="13"
-                               FontWeight="Bold"
-                               Foreground="#F8FAFC"
-                               TextTrimming="CharacterEllipsis"/>
-                    <TextBlock x:Name="HudSubtitle"
-                               Text="Destiny 2 skate active"
-                               FontSize="11"
-                               Foreground="#94A3B8"
-                               Margin="0,2,0,0"/>
-                </StackPanel>
-            </StackPanel>
+        <!-- Either the app logo, or a status icon on a tinted tile -->
+        <Image x:Name="HudLogo" Source="{StaticResource LogoMark}" Width="24" Height="24" Margin="2,0,14,0"
+               VerticalAlignment="Center" Visibility="Collapsed"/>
+        <Border x:Name="IconBadge" Width="28" Height="28" CornerRadius="7" Margin="0,0,12,0" VerticalAlignment="Center">
+            <controls:AppIcon x:Name="HudIcon" IconKey="play" Size="16"/>
         </Border>
+
+        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock x:Name="HudTitle" Text="Title" FontSize="13.5" FontWeight="SemiBold"
+                       Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
+            <TextBlock x:Name="HudSubtitle" Text="Subtitle" FontSize="12" Margin="0,1,0,0"
+                       Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
     </Grid>
 </Window>
