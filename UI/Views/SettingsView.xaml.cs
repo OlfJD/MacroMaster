@@ -6,22 +6,29 @@ using MacroMaster.Core.Native;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
 
-namespace MacroMaster.UI.Windows;
+namespace MacroMaster.UI.Views;
 
-public partial class SettingsDialog : Window
+/// <summary>
+/// Settings as a page inside the main window (see MainWindow.SettingsBtn_Click). Writes into the
+/// AppSettings it was given only on Save, then raises <see cref="Finished"/>.
+/// </summary>
+public partial class SettingsView : System.Windows.Controls.UserControl
 {
+    /// <summary>True = saved, false = left without saving.</summary>
+    public event Action<bool>? Finished;
+
     private readonly AppSettings _settings;
     private TextBox? _activeCaptureTextBox;
     private Button? _activeCaptureButton;
     private LowLevelKeyboardHook? _captureKeyboardHook;
     private LowLevelMouseHook? _captureMouseHook;
 
-    public SettingsDialog(AppSettings settings)
+    public SettingsView(AppSettings settings)
     {
         InitializeComponent();
-        WindowHelper.Attach(this, RootGrid);
         _settings = settings;
         LoadSettings();
+        Unloaded += (_, _) => StopKeyCapture(); // never leave a keyboard hook behind
     }
 
     private void LoadSettings()
@@ -142,8 +149,7 @@ public partial class SettingsDialog : Window
     private void CloseBtn_Click(object sender, RoutedEventArgs e)
     {
         StopKeyCapture();
-        DialogResult = false;
-        Close();
+        Finished?.Invoke(false);
     }
 
     private void SaveBtn_Click(object sender, RoutedEventArgs e)
@@ -158,12 +164,12 @@ public partial class SettingsDialog : Window
             int quickVk = KeyHelper.NormalizeToVk(quickOpen);
             if (quickVk == 0)
             {
-                ConfirmDialog.Show(this, "That quick-open key isn't recognised", $"“{quickOpen}” isn't a key MacroMaster knows. Use Capture and press the key.", "OK", cancelText: null);
+                Windows.ConfirmDialog.Show(Window.GetWindow(this)!,"That quick-open key isn't recognised", $"“{quickOpen}” isn't a key MacroMaster knows. Use Capture and press the key.", "OK", cancelText: null);
                 return;
             }
             if (quickVk == KeyHelper.NormalizeToVk(killSwitch))
             {
-                ConfirmDialog.Show(this, "Pick a different quick-open key", "It's the same key as the kill switch, which would always win.", "OK", cancelText: null);
+                Windows.ConfirmDialog.Show(Window.GetWindow(this)!,"Pick a different quick-open key", "It's the same key as the kill switch, which would always win.", "OK", cancelText: null);
                 return;
             }
         }
@@ -188,13 +194,6 @@ public partial class SettingsDialog : Window
         _settings.MinimizeToTray = ChkMinimizeToTray.IsChecked == true;
         _settings.CloseToTray = ChkCloseToTray.IsChecked == true;
 
-        DialogResult = true;
-        Close();
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        base.OnClosed(e);
-        StopKeyCapture();
+        Finished?.Invoke(true);
     }
 }

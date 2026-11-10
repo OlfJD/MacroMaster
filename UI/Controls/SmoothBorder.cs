@@ -15,6 +15,42 @@ namespace MacroMaster.UI.Controls;
 /// </summary>
 public class SmoothBorder : Border
 {
+    /// <summary>
+    /// Clips the child to the rounded inside of the outline, so things that fill the whole width
+    /// (row hover backgrounds, dividers) can't poke out past the corners.
+    /// </summary>
+    public bool ClipContent
+    {
+        get => (bool)GetValue(ClipContentProperty);
+        set => SetValue(ClipContentProperty, value);
+    }
+
+    public static readonly DependencyProperty ClipContentProperty =
+        DependencyProperty.Register(nameof(ClipContent), typeof(bool), typeof(SmoothBorder),
+            new FrameworkPropertyMetadata(false, FrameworkPropertyMetadataOptions.AffectsArrange));
+
+    protected override System.Windows.Size ArrangeOverride(System.Windows.Size finalSize)
+    {
+        var size = base.ArrangeOverride(finalSize);
+        if (Child != null)
+        {
+            if (ClipContent)
+            {
+                double t = BorderThickness.Left;
+                double radius = Math.Max(0, CornerRadius.TopLeft - t / 2);
+                // In the child's own coordinates: it starts after the outline and the padding
+                var inner = new Rect(-Padding.Left, -Padding.Top,
+                                     Math.Max(0, finalSize.Width - 2 * t), Math.Max(0, finalSize.Height - 2 * t));
+                Child.Clip = new RectangleGeometry(inner, radius, radius);
+            }
+            else if (Child.Clip != null)
+            {
+                Child.Clip = null;
+            }
+        }
+        return size;
+    }
+
     protected override void OnRender(DrawingContext dc)
     {
         Thickness t = BorderThickness;

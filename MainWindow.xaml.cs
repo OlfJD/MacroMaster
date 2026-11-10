@@ -480,11 +480,7 @@ public partial class MainWindow : Window
         var editor = new MacroEditorView(existing, AllMacros(), profile);
         editor.Finished += saved =>
         {
-            EditorHost.Children.Clear();
-            EditorHost.Visibility = Visibility.Collapsed;
-            SidebarPane.Visibility = Visibility.Visible;
-            MainPane.Visibility = Visibility.Visible;
-            FadeIn(MainPane);
+            ClosePage();
 
             if (!saved) return;
             if (existing == null)
@@ -502,12 +498,7 @@ public partial class MainWindow : Window
             Notify(existing == null ? "Macro created" : "Macro saved", editor.Macro.Name, "logo");
         };
 
-        // Hidden (not just covered) so Tab can't reach the controls underneath
-        SidebarPane.Visibility = Visibility.Hidden;
-        MainPane.Visibility = Visibility.Hidden;
-        EditorHost.Children.Add(editor);
-        EditorHost.Visibility = Visibility.Visible;
-        FadeIn(editor);
+        ShowPage(editor);
     }
 
     private static void FadeIn(UIElement element) =>
@@ -798,13 +789,38 @@ public partial class MainWindow : Window
 
     private void SettingsBtn_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new SettingsDialog(_engine.Settings) { Owner = this };
-        if (dlg.ShowDialog() == true)
+        if (IsEditorOpen) return;
+
+        var page = new SettingsView(_engine.Settings);
+        page.Finished += saved =>
         {
+            ClosePage();
+            if (!saved) return;
             SaveState();
             SyncUiStates();
             Notify("Settings saved", "Changes are live", "logo");
-        }
+        };
+        ShowPage(page);
+    }
+
+    /// <summary>Shows a full page (macro editor, settings) in place of the sidebar + macro list.</summary>
+    private void ShowPage(UIElement page)
+    {
+        // Hidden (not just covered) so Tab can't reach the controls underneath
+        SidebarPane.Visibility = Visibility.Hidden;
+        MainPane.Visibility = Visibility.Hidden;
+        EditorHost.Children.Add(page);
+        EditorHost.Visibility = Visibility.Visible;
+        FadeIn(page);
+    }
+
+    private void ClosePage()
+    {
+        EditorHost.Children.Clear();
+        EditorHost.Visibility = Visibility.Collapsed;
+        SidebarPane.Visibility = Visibility.Visible;
+        MainPane.Visibility = Visibility.Visible;
+        FadeIn(MainPane);
     }
 
     private void SaveState()

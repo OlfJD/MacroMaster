@@ -1,19 +1,12 @@
-<Window x:Class="MacroMaster.UI.Windows.SettingsDialog"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:controls="clr-namespace:MacroMaster.UI.Controls"
-        Style="{StaticResource AppWindow}"
-        Title="Settings - MacroMaster"
-        Icon="/Assets/app.ico"
-        Width="640" Height="830"
-        MinWidth="560" MinHeight="480"
-        ShowInTaskbar="False"
-        WindowStartupLocation="CenterOwner">
-    <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="48" ResizeBorderThickness="6" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
-    </WindowChrome.WindowChrome>
+<!-- Settings is a page inside the main window (MainWindow.ShowPage), like the macro editor.
+     Its top row is 44 px to line up with the main window's caption strip. -->
+<UserControl x:Class="MacroMaster.UI.Views.SettingsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="clr-namespace:MacroMaster.UI.Controls"
+             Focusable="False">
 
-    <Window.Resources>
+    <UserControl.Resources>
         <!-- One settings row: RowTitle + Hint on the left, control on the right -->
         <Style x:Key="RowDivider" TargetType="{x:Type Border}" BasedOn="{StaticResource Divider}">
             <Setter Property="Margin" Value="0,12"/>
@@ -28,25 +21,32 @@
             <Setter Property="MinWidth" Value="92"/>
             <Setter Property="Margin" Value="8,0,0,0"/>
         </Style>
-    </Window.Resources>
+    </UserControl.Resources>
 
     <Grid x:Name="RootGrid" Background="{StaticResource BgBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="48"/>
+            <RowDefinition Height="44"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Header -->
-        <Grid Margin="24,0,10,0">
-            <TextBlock Text="Settings" Style="{StaticResource H2}" VerticalAlignment="Center"/>
-            <Button Style="{StaticResource IconButton}" HorizontalAlignment="Right" Click="CloseBtn_Click" ToolTip="Close">
-                <controls:AppIcon IconKey="x" Size="12"/>
+        <!-- Breadcrumb: "← Macros / Settings" (same as the macro editor page) -->
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="16,0,0,0">
+            <Button Style="{StaticResource GhostButtonSm}" Margin="0" Padding="8,0" Click="CloseBtn_Click"
+                    ToolTip="Back to your macros without saving" AutomationProperties.Name="Back to macros">
+                <StackPanel Orientation="Horizontal">
+                    <controls:AppIcon IconKey="arrow-left" Size="12" Margin="0,0,8,0"/>
+                    <TextBlock Text="Macros" VerticalAlignment="Center"/>
+                </StackPanel>
             </Button>
-        </Grid>
+            <TextBlock Text="/" Style="{StaticResource Caption}" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="4,0,12,0"/>
+            <TextBlock Text="Settings" Style="{StaticResource Caption}" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"/>
+        </StackPanel>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="24,4,18,24">
-            <StackPanel Margin="0,0,6,0">
+            <!-- One centred column: settings rows get hard to scan when they stretch across a wide window -->
+            <StackPanel Margin="0,0,6,0" MaxWidth="720">
+                <TextBlock Text="Settings" Style="{StaticResource H1}" Margin="0,0,0,20"/>
 
                 <!-- GLOBAL KEYS: work everywhere, even while the engine is paused -->
                 <TextBlock Text="GLOBAL KEYS" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
@@ -199,4 +199,4 @@
             </StackPanel>
         </Border>
     </Grid>
-</Window>
+</UserControl>

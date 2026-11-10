@@ -102,6 +102,13 @@ public static class KeyHelper
         };
     }
 
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+    private static extern short VkKeyScanW(char ch);
+
+    /// <summary>
+    /// Everything the name table above doesn't list. Together with <see cref="VkToString"/> this
+    /// guarantees that any key the capture buttons can produce is understood again when it's read back.
+    /// </summary>
     private static int ParseStandardKey(string k)
     {
         if (k.Length == 1)
@@ -109,6 +116,26 @@ public static class KeyHelper
             char c = char.ToUpperInvariant(k[0]);
             if (c >= 'A' && c <= 'Z') return c;
             if (c >= '0' && c <= '9') return c;
+
+            // Any other single character (+ # - , . < ^ …): ask the keyboard layout which key types it
+            short scan = VkKeyScanW(k[0]);
+            if (scan != -1) return scan & 0xFF;
+        }
+
+        switch (k)
+        {
+            case "win" or "lwin" or "windows": return 0x5B;
+            case "rwin": return 0x5C;
+            case "apps" or "menu" or "contextmenu": return 0x5D;
+            case "numlock": return 0x90;
+            case "scrolllock" or "scroll": return 0x91;
+        }
+
+        // Raw fallback written by VkToString for keys that have no name at all: "VK_0xE2"
+        if (k.StartsWith("vk_0x", StringComparison.Ordinal) &&
+            int.TryParse(k.AsSpan(5), System.Globalization.NumberStyles.HexNumber, null, out int raw) && raw is > 0 and < 256)
+        {
+            return raw;
         }
 
         if (Enum.TryParse<Key>(k, true, out var wpfKey))
@@ -158,6 +185,22 @@ public static class KeyHelper
             0x79 => "F10",
             0x7A => "F11",
             0x7B => "F12",
+            >= 0x7C and <= 0x87 => $"F{vk - 0x7C + 13}",
+            0x13 => "Pause",
+            0x14 => "CapsLock",
+            0x2C => "PrintScreen",
+            0x5B => "Win",
+            0x5C => "RWin",
+            0x5D => "Apps",
+            0x90 => "NumLock",
+            0x91 => "ScrollLock",
+            // Numpad keys type the same characters as the main block, so they need their own names
+            >= 0x60 and <= 0x69 => $"Numpad{vk - 0x60}",
+            0x6A => "Num*",
+            0x6B => "Num+",
+            0x6D => "Num-",
+            0x6E => "Num.",
+            0x6F => "Num/",
             0xDE => "Ä",
             0xC0 => "Ö",
             0xBA => "Ü",
@@ -170,8 +213,19 @@ public static class KeyHelper
     {
         if (vk >= 'A' && vk <= 'Z') return ((char)vk).ToString();
         if (vk >= '0' && vk <= '9') return ((char)vk).ToString();
-        
+
+        // Punctuation keys: show the character printed on the key in the current layout (+ # - , . < ^)
+        uint mapped = Win32Api.MapVirtualKey(vk, 2) & 0x7FFFFFFF; // MAPVK_VK_TO_CHAR; top bit marks dead keys
+        if (mapped > 0x20 && mapped < 0xFFFF && !char.IsControl((char)mapped) && NormalizeToVk(((char)mapped).ToString()) == (int)vk)
+        {
+            return ((char)mapped).ToString();
+        }
+
+        // Named keys WPF knows (media keys, left/right modifiers…); these parse back via Enum.TryParse
         var key = KeyInterop.KeyFromVirtualKey((int)vk);
-        return key.ToString();
+        if (key != Key.None && NormalizeToVk(key.ToString()) == (int)vk) return key.ToString();
+
+        // Last resort so that no key is ever "not recognised"
+        return $"VK_0x{vk:X2}";
     }
 }

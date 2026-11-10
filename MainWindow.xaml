@@ -241,12 +241,17 @@
                                         <Setter Property="Template">
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="{x:Type GroupItem}">
-                                                    <Border x:Name="Frame">
-                                                        <Grid>
+                                                    <!-- A mode group is a framed block of its own: darker fill + outline, inset from the card edge.
+                                                         Its rows are indented (see the RequiresArming trigger in the row template) so the bracket
+                                                         keeps clear of the outline. Ungrouped macros (Name "") lose the frame in the trigger below. -->
+                                                    <controls:SmoothBorder x:Name="Frame" Margin="6,8,6,8" ClipContent="True"
+                                                                           Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderStrongBrush}"
+                                                                           BorderThickness="1" CornerRadius="{StaticResource RadiusMd}">
+                                                        <Grid x:Name="FrameContent" Margin="0,0,0,-1">
                                                             <StackPanel>
                                                                 <!-- Quiet label in the name column (one step in from the switches); the bracket does the linking.
                                                                      Fixed height: the bracket's top margin below depends on it. -->
-                                                                <Border x:Name="Header" Height="40" Padding="16,12,16,0">
+                                                                <Border x:Name="Header" Height="40" Padding="20,12,9,0">
                                                                     <Grid>
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="52"/>
@@ -297,14 +302,21 @@
                                                             </StackPanel>
                                                             <!-- Bracket linking the group's rows: runs from the first row's centre to the last row's centre
                                                                  (40 header + half of a 62 px row), with a tick pointing at each end's switch. -->
-                                                            <Border x:Name="Link" Width="9" HorizontalAlignment="Left" Margin="5,70,0,30" IsHitTestVisible="False"
+                                                            <!-- 8 px in from the frame's outline; its ticks end 3 px before the (indented) switches -->
+                                                            <Border x:Name="Link" Width="9" HorizontalAlignment="Left" Margin="8,70,0,30" IsHitTestVisible="False"
                                                                     BorderBrush="{StaticResource AccentBrush}" BorderThickness="2,2,0,2" CornerRadius="4,0,0,4"/>
                                                         </Grid>
-                                                    </Border>
+                                                    </controls:SmoothBorder>
                                                     <ControlTemplate.Triggers>
                                                         <DataTrigger Binding="{Binding Name}" Value="">
                                                             <Setter TargetName="Header" Property="Visibility" Value="Collapsed"/>
                                                             <Setter TargetName="Link" Property="Visibility" Value="Collapsed"/>
+                                                            <Setter TargetName="Frame" Property="Margin" Value="0"/>
+                                                            <Setter TargetName="Frame" Property="BorderThickness" Value="0"/>
+                                                            <Setter TargetName="Frame" Property="CornerRadius" Value="0"/>
+                                                            <Setter TargetName="Frame" Property="Background" Value="Transparent"/>
+                                                            <Setter TargetName="Frame" Property="ClipContent" Value="False"/>
+                                                            <Setter TargetName="FrameContent" Property="Margin" Value="0"/>
                                                         </DataTrigger>
                                                         <DataTrigger Binding="{Binding ItemCount}" Value="1">
                                                             <Setter TargetName="CountMany" Property="Visibility" Value="Collapsed"/>
@@ -450,6 +462,11 @@
                                         <Setter TargetName="TriggerCaps" Property="Opacity" Value="0.45"/>
                                         <Setter TargetName="ModePanel" Property="Opacity" Value="0.45"/>
                                         <Setter TargetName="StepsText" Property="Opacity" Value="0.45"/>
+                                    </DataTrigger>
+                                    <!-- Inside a mode group's frame: indent the switch by 10 px (room for the bracket) and pull the
+                                         right side back out by the frame's 7 px inset, so Trigger / Mode / Steps stay in their columns -->
+                                    <DataTrigger Binding="{Binding RequiresArming}" Value="True">
+                                        <Setter TargetName="Row" Property="Margin" Value="4,0,-7,0"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding IsCurrentlyArmed}" Value="True">
                                         <Setter TargetName="ArmTag" Property="Background" Value="{StaticResource WarningSubtleBrush}"/>
