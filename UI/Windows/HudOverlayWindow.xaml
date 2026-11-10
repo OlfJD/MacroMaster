@@ -30,12 +30,12 @@
         <!-- Either the app logo, or a status icon on a tinted tile -->
         <Image x:Name="HudLogo" Source="{StaticResource LogoMark}" Width="24" Height="24" Margin="2,0,14,0"
                VerticalAlignment="Center" Visibility="Collapsed"/>
-        <Border x:Name="IconBadge" Width="28" Height="28" CornerRadius="7" Margin="0,0,12,0" VerticalAlignment="Center">
+        <Border x:Name="IconBadge" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}" Margin="0,0,12,0" VerticalAlignment="Center">
             <controls:AppIcon x:Name="HudIcon" IconKey="play" Size="16"/>
         </Border>
 
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-            <TextBlock x:Name="HudTitle" Text="Title" FontSize="13.5" FontWeight="SemiBold"
+            <TextBlock x:Name="HudTitle" Text="Title" FontSize="13" FontWeight="SemiBold"
                        Foreground="{StaticResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis"/>
             <TextBlock x:Name="HudSubtitle" Text="Subtitle" FontSize="12" Margin="0,1,0,0"
                        Foreground="{StaticResource TextSecondaryBrush}" TextTrimming="CharacterEllipsis"/>

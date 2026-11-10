@@ -26,8 +26,8 @@ public sealed class ModeLabelConverter : IValueConverter
         if (value is not MacroDefinition m) return string.Empty;
         return m.Mode switch
         {
-            ExecutionMode.Once => "Run once",
-            ExecutionMode.Toggle => "Toggle loop",
+            ExecutionMode.Once => "Once",
+            ExecutionMode.Toggle => "Loop",
             ExecutionMode.HoldWhileDown => "While held",
             ExecutionMode.RepeatCount => $"Repeat ×{Math.Max(1, m.RepeatCount)}",
             _ => m.Mode.ToString()

@@ -11,6 +11,7 @@ using MacroMaster.Core.Native;
 using MacroMaster.Core.Parsers;
 using MacroMaster.Core.Presets;
 using MacroMaster.UI;
+using MacroMaster.UI.Views;
 using MacroMaster.UI.Windows;
 using Brush = System.Windows.Media.Brush;
 using ButtonBase = System.Windows.Controls.Primitives.ButtonBase;
@@ -63,6 +64,7 @@ public partial class MainWindow : Window
         _engine.Initialize(settings, profiles!);
         _engine.OnHudNotification += Engine_OnHudNotification;
         _engine.OnStateRefreshed += Engine_OnStateRefreshed;
+        _engine.OnQuickOpenRequested += () => Dispatcher.BeginInvoke(ToggleQuickOpen); // raised on the hook thread
         if (!_engine.HooksActive)
         {
             Notify("Hotkeys couldn't start", "Windows refused the keyboard/mouse hook. Restart MacroMaster.", "octagon-x", "#F2555A", 8000);
@@ -128,6 +130,24 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    /// <summary>
+    /// Quick-open key (Settings): brings the window in front of everything, e.g. to make a macro
+    /// mid-game. Pressed again while MacroMaster is in front, it gets out of the way again.
+    /// </summary>
+    private void ToggleQuickOpen()
+    {
+        if (IsVisible && IsActive && WindowState != WindowState.Minimized)
+        {
+            if (_engine.Settings.MinimizeToTray) Hide();
+            else WindowState = WindowState.Minimized;
+            return;
+        }
+
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        WindowHelper.ForceToFront(this);
+    }
+
     private void Notify(string title, string subtitle, string icon, string color = "#7C83FF", int durationMs = 2200)
     {
         _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs);
@@ -158,7 +178,7 @@ public partial class MainWindow : Window
         EngineSubtitle.Text = on ? "Hotkeys are live" : "All hotkeys ignored";
         EngineDot.Fill = Res(on ? "SuccessBrush" : "TextMutedBrush");
         EngineCard.Background = Res(on ? "SuccessSubtleBrush" : "SurfaceBrush");
-        EngineCard.BorderBrush = on ? new SolidColorBrush(Color.FromRgb(0x1F, 0x42, 0x32)) : Res("BorderBrush");
+        EngineCard.BorderBrush = Res(on ? "SuccessBorderBrush" : "BorderBrush");
 
         StatusDot.Fill = Res(on ? "SuccessBrush" : "TextMutedBrush");
         StatusEngineText.Text = on ? "Engine running" : "Engine paused";
@@ -353,6 +373,8 @@ public partial class MainWindow : Window
         else
         {
             _macroView = new ListCollectionView(profile.Macros) { Filter = MacroFilter };
+            // Macros of one mode group (same hotkey, switch key picks the active one) are shown together
+            _macroView.GroupDescriptions.Add(new PropertyGroupDescription(nameof(MacroDefinition.ModeGroupKey)));
             MacrosListBox.ItemsSource = _macroView;
         }
         _runtimeSignature = string.Empty;
@@ -441,32 +463,146 @@ public partial class MainWindow : Window
     private IEnumerable<(MacroDefinition, MacroProfile)> AllMacros() =>
         _engine.Profiles.SelectMany(p => p.Macros.Select(m => (m, p))).ToList();
 
-    private void EditMacro(MacroDefinition macro)
+    private void EditMacro(MacroDefinition macro) => OpenEditor(macro);
+
+    private void NewMacroBtn_Click(object sender, RoutedEventArgs e) => OpenEditor(null);
+
+    private bool IsEditorOpen => EditorHost.Children.Count > 0;
+
+    /// <summary>
+    /// Shows the macro editor as a page inside this window (it replaces the sidebar and the macro
+    /// list until the user saves or goes back). <paramref name="existing"/> = null creates a macro.
+    /// </summary>
+    private void OpenEditor(MacroDefinition? existing)
     {
-        var editor = new MacroEditorDialog(macro, AllMacros()) { Owner = this };
-        if (editor.ShowDialog() != true || _engine.SelectedProfile == null) return;
+        if (IsEditorOpen || _engine.SelectedProfile is not { } profile) return;
 
-        int idx = _engine.SelectedProfile.Macros.IndexOf(macro);
-        if (idx < 0) return;
-
-        _engine.SelectedProfile.Macros[idx] = editor.Macro;
-        SaveState();
-        RefreshMacrosList();
-        Notify("Macro saved", editor.Macro.Name, "logo");
-    }
-
-    private void NewMacroBtn_Click(object sender, RoutedEventArgs e)
-    {
-        if (_engine.SelectedProfile == null) return;
-        var editor = new MacroEditorDialog(null, AllMacros()) { Owner = this };
-        if (editor.ShowDialog() == true)
+        var editor = new MacroEditorView(existing, AllMacros(), profile);
+        editor.Finished += saved =>
         {
-            _engine.SelectedProfile.Macros.Add(editor.Macro);
+            EditorHost.Children.Clear();
+            EditorHost.Visibility = Visibility.Collapsed;
+            SidebarPane.Visibility = Visibility.Visible;
+            MainPane.Visibility = Visibility.Visible;
+            FadeIn(MainPane);
+
+            if (!saved) return;
+            if (existing == null)
+            {
+                profile.Macros.Add(editor.Macro);
+            }
+            else
+            {
+                int idx = profile.Macros.IndexOf(existing);
+                if (idx < 0) return; // deleted meanwhile
+                profile.Macros[idx] = editor.Macro;
+            }
             SaveState();
             RefreshMacrosList();
-            Notify("Macro created", editor.Macro.Name, "logo");
+            Notify(existing == null ? "Macro created" : "Macro saved", editor.Macro.Name, "logo");
+        };
+
+        // Hidden (not just covered) so Tab can't reach the controls underneath
+        SidebarPane.Visibility = Visibility.Hidden;
+        MainPane.Visibility = Visibility.Hidden;
+        EditorHost.Children.Add(editor);
+        EditorHost.Visibility = Visibility.Visible;
+        FadeIn(editor);
+    }
+
+    private static void FadeIn(UIElement element) =>
+        element.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120)));
+
+    #region Macro row menu: duplicate, reorder, move to another profile
+
+    /// <summary>Adds one "Move to &lt;profile&gt;" entry per other profile each time a row's menu opens.</summary>
+    private void MacroMenu_Opened(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.ContextMenu { DataContext: MacroDefinition macro } menu) return;
+
+        for (int i = menu.Items.Count - 1; i >= 0; i--)
+        {
+            if (menu.Items[i] is FrameworkElement { Tag: "move-to" }) menu.Items.RemoveAt(i);
+        }
+
+        var others = _engine.Profiles.Where(p => p != _engine.SelectedProfile).ToList();
+        if (others.Count == 0) return;
+
+        int at = menu.Items.Count - 2; // in front of the last separator + "Delete"
+        menu.Items.Insert(at++, new System.Windows.Controls.Separator { Tag = "move-to" });
+        foreach (var target in others)
+        {
+            var item = new System.Windows.Controls.MenuItem
+            {
+                Header = $"Move to {target.Name}",
+                Tag = "move-to",
+                Icon = new UI.Controls.AppIcon { IconKey = "arrow-right", Size = 16 }
+            };
+            item.Click += (_, _) => MoveMacroToProfile(macro, target);
+            menu.Items.Insert(at++, item);
         }
     }
+
+    private void MacroDuplicate_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MacroDefinition macro } || _engine.SelectedProfile is not { } profile) return;
+        int idx = profile.Macros.IndexOf(macro);
+        if (idx < 0) return;
+
+        var copy = MacroJsonSerializer.CloneMacro(macro);
+        copy.Name = $"{macro.Name} copy";
+        // Same hotkey (and switch key) as the original, so it starts switched off instead of fighting it
+        copy.IsEnabled = false;
+        copy.IsCurrentlyArmed = false;
+
+        profile.Macros.Insert(idx + 1, copy);
+        SaveState();
+        RefreshMacrosList();
+        Notify("Macro duplicated", "The copy is off — it has the same hotkey as the original", "logo", durationMs: 3500);
+    }
+
+    private void MacroMoveUp_Click(object sender, RoutedEventArgs e) => MoveMacro(sender, -1);
+
+    private void MacroMoveDown_Click(object sender, RoutedEventArgs e) => MoveMacro(sender, +1);
+
+    private void MoveMacro(object sender, int direction)
+    {
+        if (sender is not FrameworkElement { DataContext: MacroDefinition macro } || _engine.SelectedProfile is not { } profile) return;
+        var macros = profile.Macros;
+        int from = macros.IndexOf(macro);
+        if (from < 0) return;
+
+        // The list shows each mode group as one block, so the visible neighbour is the nearest
+        // macro of the same group (or the nearest ungrouped one), not necessarily index ± 1
+        int to = from + direction;
+        while (to >= 0 && to < macros.Count && macros[to].ModeGroupKey != macro.ModeGroupKey) to += direction;
+        if (to < 0 || to >= macros.Count) return;
+
+        macros.Move(from, to);
+        SaveState();
+        RefreshMacrosList();
+    }
+
+    private void MoveMacroToProfile(MacroDefinition macro, MacroProfile target)
+    {
+        if (_engine.SelectedProfile is not { } source || source == target || !source.Macros.Remove(macro)) return;
+
+        if (macro.RequiresArming)
+        {
+            // Keep "exactly one active mode per group" true on both sides of the move
+            bool wasActive = macro.IsCurrentlyArmed;
+            macro.IsCurrentlyArmed = !target.Macros.Any(m => m.RequiresArming && m.ModeGroupKey == macro.ModeGroupKey && m.IsCurrentlyArmed);
+            var left = source.Macros.Where(m => m.RequiresArming && m.ModeGroupKey == macro.ModeGroupKey).ToList();
+            if (wasActive && left.Count > 0 && !left.Any(m => m.IsCurrentlyArmed)) left[0].IsCurrentlyArmed = true;
+        }
+
+        target.Macros.Add(macro);
+        SaveState();
+        RefreshMacrosList();
+        Notify("Macro moved", $"{macro.Name} → {target.Name}", "logo");
+    }
+
+    #endregion
 
     private void MacroDelete_Click(object sender, RoutedEventArgs e)
     {
@@ -509,24 +645,113 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Import AutoHotkey script",
-            Filter = "AutoHotkey scripts (*.ahk)|*.ahk|All files (*.*)|*.*",
+            Title = "Import profiles or AutoHotkey scripts",
+            Filter = "Profiles and AutoHotkey scripts (*.json;*.ahk)|*.json;*.ahk|MacroMaster profiles (*.json)|*.json|AutoHotkey scripts (*.ahk)|*.ahk",
             Multiselect = true
         };
         if (dialog.ShowDialog() == true)
         {
-            ImportAhkFiles(dialog.FileNames);
+            ImportFiles(dialog.FileNames);
         }
     }
+
+    /// <summary>.ahk scripts become macros in the shown profile; exported .json files are added as profiles.</summary>
+    private void ImportFiles(IReadOnlyCollection<string> files)
+    {
+        ImportAhkFiles(files);
+        ImportProfileFiles(files);
+    }
+
+    private void ImportProfileFiles(IEnumerable<string> files)
+    {
+        MacroProfile? last = null;
+        int count = 0;
+        string? firstError = null;
+
+        foreach (var file in files.Where(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                foreach (var profile in MacroJsonSerializer.ImportProfiles(file))
+                {
+                    profile.Name = UniqueProfileName(profile.Name);
+                    // A file from someone else shouldn't put its hotkeys live the moment it's opened
+                    profile.IsOn = false;
+                    _engine.Profiles.Add(profile);
+                    last = profile;
+                    count++;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException)
+            {
+                firstError ??= $"{Path.GetFileName(file)}: {ex.Message}";
+            }
+        }
+
+        if (last != null)
+        {
+            ActivateProfile(last);
+            SaveState();
+            RefreshProfiles();
+            RefreshMacrosList();
+            Notify(count == 1 ? $"Imported “{last.Name}”" : $"Imported {count} profiles",
+                   "Switched off for now — turn it on in the sidebar", "logo", durationMs: 4000);
+        }
+        if (firstError != null)
+        {
+            ConfirmDialog.Show(this, "A file couldn't be imported", firstError, "OK", cancelText: null);
+        }
+    }
+
+    private string UniqueProfileName(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) name = "Imported profile";
+        bool Taken(string n) => _engine.Profiles.Any(p => p.Name.Equals(n, StringComparison.OrdinalIgnoreCase));
+        if (!Taken(name)) return name;
+
+        string candidate = $"{name} (imported)";
+        for (int i = 2; Taken(candidate); i++) candidate = $"{name} (imported {i})";
+        return candidate;
+    }
+
+    private void ExportProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfileFromMenu(sender) is not { } profile) return;
+
+        string safeName = string.Concat(profile.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export profile",
+            Filter = "MacroMaster profile (*.json)|*.json",
+            FileName = (safeName.Length > 0 ? safeName : "profile") + ".json",
+            DefaultExt = ".json",
+            AddExtension = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            MacroJsonSerializer.ExportProfiles(new[] { profile }, dialog.FileName);
+            Notify("Profile exported", Path.GetFileName(dialog.FileName), "logo");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ConfirmDialog.Show(this, "The profile couldn't be exported", ex.Message, "OK", cancelText: null);
+        }
+    }
+
+    private static bool IsImportable(string file) =>
+        file.EndsWith(".ahk", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".json", StringComparison.OrdinalIgnoreCase);
 
     private static bool HasAhkFiles(System.Windows.DragEventArgs e) =>
         e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop) &&
         e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files &&
-        files.Any(f => f.EndsWith(".ahk", StringComparison.OrdinalIgnoreCase));
+        files.Any(IsImportable);
 
     private void Window_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        if (HasAhkFiles(e))
+        // Importing targets the macro list, which isn't on screen while the editor page is open
+        if (!IsEditorOpen && HasAhkFiles(e))
         {
             e.Effects = System.Windows.DragDropEffects.Copy;
             DropOverlay.Visibility = Visibility.Visible;
@@ -551,9 +776,10 @@ public partial class MainWindow : Window
     private void Window_Drop(object sender, System.Windows.DragEventArgs e)
     {
         DropOverlay.Visibility = Visibility.Collapsed;
+        if (IsEditorOpen) return;
         if (e.Data.GetData(System.Windows.DataFormats.FileDrop) is string[] files)
         {
-            ImportAhkFiles(files);
+            ImportFiles(files);
         }
     }
 
@@ -623,6 +849,15 @@ public partial class MainWindow : Window
         }
         else
         {
+            // Really quitting: don't lose a half-edited macro without asking
+            var editor = EditorHost.Children.OfType<MacroEditorView>().FirstOrDefault();
+            if (editor?.HasUnsavedChanges == true &&
+                !ConfirmDialog.Show(this, "Quit without saving?", "The macro you're editing has unsaved changes.", "Quit", "Keep editing", danger: true))
+            {
+                e.Cancel = true;
+                return;
+            }
+
             _trayManager?.Dispose();
             _hudOverlay?.Close();
             _engine.Dispose();

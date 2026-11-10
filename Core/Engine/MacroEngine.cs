@@ -21,6 +21,8 @@ public class MacroEngine : IDisposable
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningTasks = new();
     // Run-once / repeat macros currently executing, so a second press can't start an overlapping copy
     private readonly ConcurrentDictionary<string, byte> _singleRuns = new();
+    // "While held" macros running right now → the key / mouse button whose release stops them
+    private readonly ConcurrentDictionary<string, (int Vk, MacroDefinition Macro)> _holdRuns = new();
 
     private InputHookThread? _hookThread;
 
@@ -42,6 +44,8 @@ public class MacroEngine : IDisposable
     // Events for UI & HUD
     public event Action<string, string, string, string>? OnHudNotification; // title, subtitle, iconKey, accentColor
     public event Action? OnStateRefreshed;
+    /// <summary>The quick-open key was pressed (raised on the hook thread).</summary>
+    public event Action? OnQuickOpenRequested;
 
     public InputSimulator Simulator => _simulator;
 
@@ -102,6 +106,7 @@ public class MacroEngine : IDisposable
             foreach (var m in profile.Macros.Where(m => _runningTasks.ContainsKey(m.Id)))
             {
                 StopTask(m.Id);
+                _holdRuns.TryRemove(m.Id, out _);
                 m.IsRunning = false;
             }
             _simulator.ReleaseAllInputs();
@@ -138,6 +143,13 @@ public class MacroEngine : IDisposable
             return true;
         }
 
+        // Quick open also works while paused: it opens the app, it doesn't run a macro
+        if (!string.IsNullOrWhiteSpace(Settings.QuickOpenKey) && vkCode == KeyHelper.NormalizeToVk(Settings.QuickOpenKey))
+        {
+            OnQuickOpenRequested?.Invoke();
+            return true;
+        }
+
         if (!Settings.MasterEngineEnabled) return false;
 
         foreach (var profile in LiveProfiles())
@@ -150,11 +162,11 @@ public class MacroEngine : IDisposable
 
                 foreach (var other in profile.Macros)
                 {
-                    if (other.RequiresArming && other.ArmingGroupName == macro.ArmingGroupName)
+                    if (other.RequiresArming && other.ModeGroupKey == macro.ModeGroupKey)
                         other.IsCurrentlyArmed = other.Id == macro.Id;
                 }
 
-                TriggerHud($"Armed: {macro.ArmingDisplayName}", $"Switched with {macro.ArmingKey.ToUpperInvariant()}", "circle-dot", Warning);
+                TriggerHud($"Mode: {macro.ModeShortName}", $"Switched with {macro.ArmingKey.ToUpperInvariant()}", "circle-dot", Warning);
                 OnStateRefreshed?.Invoke();
                 return false; // the arming key still reaches the game
             }
@@ -167,7 +179,7 @@ public class MacroEngine : IDisposable
                 if (!KeyMatches(vkCode, KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey))) continue;
                 if (!TriggerConditionsMet(macro)) continue;
 
-                ExecuteMacro(macro);
+                Trigger(macro, vkCode);
                 return true; // swallow the trigger key
             }
         }
@@ -175,7 +187,36 @@ public class MacroEngine : IDisposable
         return false;
     }
 
-    private bool HandleKeyUp(int vkCode, bool isExtended) => false;
+    private bool HandleKeyUp(int vkCode, bool isExtended) => StopHeldMacros(vkCode);
+
+    /// <summary>A hotkey fired: "while held" macros also need to know which key to wait for.</summary>
+    private void Trigger(MacroDefinition macro, int vk)
+    {
+        if (macro.Mode != ExecutionMode.HoldWhileDown)
+        {
+            ExecuteMacro(macro);
+            return;
+        }
+
+        if (_runningTasks.ContainsKey(macro.Id)) return; // already running (e.g. a second trigger key)
+        _holdRuns[macro.Id] = (vk, macro);
+        StartLoop(macro, "Running while you hold the hotkey");
+    }
+
+    /// <summary>The key / button was let go: stop every "while held" macro it started. True if any stopped.</summary>
+    private bool StopHeldMacros(int vk)
+    {
+        if (_holdRuns.IsEmpty) return false;
+
+        bool any = false;
+        foreach (var run in _holdRuns)
+        {
+            if (!KeyMatches(vk, run.Value.Vk)) continue;
+            StopLoop(run.Value.Macro, announce: false);
+            any = true;
+        }
+        return any;
+    }
 
     /// <summary>Low-level hooks report left/right modifier codes; match them against generic ones.</summary>
     private static bool KeyMatches(int vkCode, int targetVk)
@@ -223,11 +264,12 @@ public class MacroEngine : IDisposable
 
     private bool HandleMouseEvent(MouseButtonType button, bool isDown)
     {
-        if (!isDown || !Settings.MasterEngineEnabled) return false;
-
         // Compare by virtual key: the editor stores mouse triggers as "Mouse 4" / "Left Click", and
         // comparing to the enum name ("Left") also matched the Left *arrow* key and hijacked clicks
         int buttonVk = MouseButtonToVk(button);
+
+        if (!isDown) return StopHeldMacros(buttonVk);
+        if (!Settings.MasterEngineEnabled) return false;
 
         foreach (var profile in LiveProfiles())
         {
@@ -237,7 +279,7 @@ public class MacroEngine : IDisposable
                 if (KeyHelper.NormalizeToVk(macro.Trigger.PrimaryKey) != buttonVk) continue;
                 if (!TriggerConditionsMet(macro)) continue;
 
-                ExecuteMacro(macro);
+                Trigger(macro, buttonVk);
                 return true;
             }
         }
@@ -249,53 +291,70 @@ public class MacroEngine : IDisposable
 
     #region Macro Execution
 
+    /// <summary>Starts looping the macro's steps until <see cref="StopLoop"/> (or the kill switch).</summary>
+    private void StartLoop(MacroDefinition macro, string hudSubtitle)
+    {
+        macro.IsRunning = true;
+        TriggerHud(macro.Name, hudSubtitle, "repeat", Success);
+        OnStateRefreshed?.Invoke();
+
+        var cts = new CancellationTokenSource();
+        _runningTasks[macro.Id] = cts;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                while (!cts.Token.IsCancellationRequested)
+                {
+                    ExecuteActionSequence(macro.Actions, cts.Token);
+                    if (macro.LoopDelayMs > 0)
+                    {
+                        InputSimulator.PreciseSleep(macro.LoopDelayMs, cts.Token);
+                    }
+                }
+            }
+            finally
+            {
+                // Only remove our own registration: after a quick off->on toggle a newer run is
+                // already registered under the same id, and removing it would leave that loop
+                // untracked (and unstoppable, even by the killswitch).
+                _runningTasks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(macro.Id, cts));
+                if (!_runningTasks.ContainsKey(macro.Id))
+                {
+                    macro.IsRunning = false;
+                }
+                OnStateRefreshed?.Invoke();
+            }
+        }, cts.Token);
+    }
+
+    private void StopLoop(MacroDefinition macro, bool announce)
+    {
+        StopTask(macro.Id);
+        _holdRuns.TryRemove(macro.Id, out _);
+        macro.IsRunning = false;
+        _simulator.ReleaseAllInputs();
+        if (announce) TriggerHud(macro.Name, "Stopped", "square", Muted);
+        OnStateRefreshed?.Invoke();
+    }
+
+    /// <summary>
+    /// Runs a macro the way its hotkey would. Also used by the Run button and the editor's test
+    /// run, where there is no key to let go of: a "while held" macro then behaves like a loop
+    /// (Run starts it, Run again stops it).
+    /// </summary>
     public void ExecuteMacro(MacroDefinition macro)
     {
-        if (macro.Mode == ExecutionMode.Toggle)
+        if (macro.Mode is ExecutionMode.Toggle or ExecutionMode.HoldWhileDown)
         {
             if (_runningTasks.ContainsKey(macro.Id))
             {
-                StopTask(macro.Id);
-                macro.IsRunning = false;
-                _simulator.ReleaseAllInputs();
-                TriggerHud(macro.Name, "Stopped", "square", Muted);
-                OnStateRefreshed?.Invoke();
+                StopLoop(macro, announce: true);
                 return;
             }
 
-            macro.IsRunning = true;
-            TriggerHud(macro.Name, "Looping — press again to stop", "repeat", Success);
-            OnStateRefreshed?.Invoke();
-
-            var cts = new CancellationTokenSource();
-            _runningTasks[macro.Id] = cts;
-
-            Task.Run(() =>
-            {
-                try
-                {
-                    while (!cts.Token.IsCancellationRequested)
-                    {
-                        ExecuteActionSequence(macro.Actions, cts.Token);
-                        if (macro.LoopDelayMs > 0)
-                        {
-                            InputSimulator.PreciseSleep(macro.LoopDelayMs, cts.Token);
-                        }
-                    }
-                }
-                finally
-                {
-                    // Only remove our own registration: after a quick off->on toggle a newer run is
-                    // already registered under the same id, and removing it would leave that loop
-                    // untracked (and unstoppable, even by the killswitch).
-                    _runningTasks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(macro.Id, cts));
-                    if (!_runningTasks.ContainsKey(macro.Id))
-                    {
-                        macro.IsRunning = false;
-                    }
-                    OnStateRefreshed?.Invoke();
-                }
-            }, cts.Token);
+            StartLoop(macro, "Looping — press again to stop");
         }
         else
         {
@@ -379,6 +438,9 @@ public class MacroEngine : IDisposable
                 case ActionType.Media:
                     _simulator.SendMediaCommand(action.MediaCommand);
                     break;
+                case ActionType.Text:
+                    _simulator.TypeText(action.TextContent, token);
+                    break;
             }
         }
     }
@@ -399,6 +461,7 @@ public class MacroEngine : IDisposable
             kvp.Value.Cancel();
         }
         _runningTasks.Clear();
+        _holdRuns.Clear();
 
         // Snapshot, not Profiles: this also runs on the hook thread (kill switch)
         foreach (var m in _snapshot.SelectMany(s => s.Macros))

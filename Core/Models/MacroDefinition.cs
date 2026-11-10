@@ -50,6 +50,27 @@ public class MacroDefinition
     [JsonIgnore]
     public bool IsRunning { get; set; } = false;
 
+    /// <summary>Name of the mode group this macro belongs to, or "" when it doesn't switch modes. Used to group rows in the list.</summary>
+    [JsonIgnore]
+    public string ModeGroupKey => !RequiresArming ? string.Empty
+                                : string.IsNullOrWhiteSpace(ArmingGroupName) ? DefaultModeGroupName
+                                : ArmingGroupName.Trim();
+
+    public const string DefaultModeGroupName = "Mode group";
+
+    /// <summary>"Wellskate (PgUp Mode)" → "Wellskate". Falls back to the macro name.</summary>
+    [JsonIgnore]
+    public string ModeShortName
+    {
+        get
+        {
+            string s = ArmingDisplayName?.Trim() ?? string.Empty;
+            int paren = s.IndexOf(" (", StringComparison.Ordinal);
+            if (paren > 0 && s.EndsWith(')')) s = s[..paren];
+            return string.IsNullOrWhiteSpace(s) ? Name : s;
+        }
+    }
+
     [JsonIgnore]
     public string StatusBadgeText
     {

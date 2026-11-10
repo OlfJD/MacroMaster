@@ -28,6 +28,7 @@ public partial class SettingsDialog : Window
     {
         // Hotkeys & Triggers
         TxtKillswitch.Text = _settings.EmergencyKillswitchKey;
+        TxtQuickOpen.Text = _settings.QuickOpenKey;
 
         // HUD / Overlay
         ChkShowOverlay.IsChecked = _settings.ShowHudOverlay;
@@ -45,6 +46,11 @@ public partial class SettingsDialog : Window
     private void BtnCaptureKillswitch_Click(object sender, RoutedEventArgs e)
     {
         ToggleCapture(TxtKillswitch, BtnCaptureKillswitch, allowMouse: false);
+    }
+
+    private void BtnCaptureQuickOpen_Click(object sender, RoutedEventArgs e)
+    {
+        ToggleCapture(TxtQuickOpen, BtnCaptureQuickOpen, allowMouse: false);
     }
 
     private void ToggleCapture(TextBox targetBox, Button targetButton, bool allowMouse)
@@ -143,6 +149,25 @@ public partial class SettingsDialog : Window
     private void SaveBtn_Click(object sender, RoutedEventArgs e)
     {
         StopKeyCapture();
+
+        // One key can't do both jobs: the kill switch is checked first and would always win
+        string quickOpen = TxtQuickOpen.Text.Trim();
+        string killSwitch = string.IsNullOrWhiteSpace(TxtKillswitch.Text) ? _settings.EmergencyKillswitchKey : TxtKillswitch.Text.Trim();
+        if (quickOpen.Length > 0)
+        {
+            int quickVk = KeyHelper.NormalizeToVk(quickOpen);
+            if (quickVk == 0)
+            {
+                ConfirmDialog.Show(this, "That quick-open key isn't recognised", $"“{quickOpen}” isn't a key MacroMaster knows. Use Capture and press the key.", "OK", cancelText: null);
+                return;
+            }
+            if (quickVk == KeyHelper.NormalizeToVk(killSwitch))
+            {
+                ConfirmDialog.Show(this, "Pick a different quick-open key", "It's the same key as the kill switch, which would always win.", "OK", cancelText: null);
+                return;
+            }
+        }
+        _settings.QuickOpenKey = quickOpen;
 
         // Hotkeys & Triggers
         if (!string.IsNullOrWhiteSpace(TxtKillswitch.Text))

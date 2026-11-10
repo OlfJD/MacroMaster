@@ -10,12 +10,12 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
     <WindowChrome.WindowChrome>
-        <WindowChrome CaptionHeight="52" ResizeBorderThickness="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
+        <WindowChrome CaptionHeight="48" ResizeBorderThickness="0" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
     </WindowChrome.WindowChrome>
 
     <Grid Background="{StaticResource SurfaceBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="52"/>
+            <RowDefinition Height="48"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -23,7 +23,7 @@
         <Grid Margin="24,0,10,0">
             <TextBlock x:Name="TxtHeader" Text="New profile" Style="{StaticResource H2}" VerticalAlignment="Center"/>
             <Button Style="{StaticResource IconButton}" HorizontalAlignment="Right" Click="CloseBtn_Click" ToolTip="Close">
-                <controls:AppIcon IconKey="x" Size="16"/>
+                <controls:AppIcon IconKey="x" Size="12"/>
             </Button>
         </Grid>
 
@@ -33,7 +33,7 @@
 
             <TextBlock Text="Game or app" Style="{StaticResource FieldLabel}"/>
             <TextBox x:Name="TxtProcessFilter" Style="{StaticResource Input}" Tag="game.exe — leave empty for all apps"/>
-            <TextBlock Text="If set, this profile's macros only fire while that app is in front." Style="{StaticResource Caption}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,0"/>
+            <TextBlock Text="If set, this profile's macros only fire while that app is in front." Style="{StaticResource Hint}" Margin="0,6,0,0"/>
         </StackPanel>
 
         <Border Grid.Row="2" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="24,14">

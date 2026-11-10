@@ -132,6 +132,54 @@ public class InputSimulator : IDisposable
         }
     }
 
+    /// <summary>
+    /// Types text as Unicode characters, so it comes out the same on every keyboard layout.
+    /// Line breaks are sent as Enter. A few ms between characters, because games and chat boxes
+    /// drop letters that arrive faster.
+    /// </summary>
+    public void TypeText(string text, CancellationToken token = default)
+    {
+        if (string.IsNullOrEmpty(text)) return;
+
+        foreach (char c in text.Replace("\r\n", "\n"))
+        {
+            if (token.IsCancellationRequested) return;
+
+            if (c == '\n')
+            {
+                SendKeyboardInput(0x0D, false);
+                SendKeyboardInput(0x0D, true);
+            }
+            else
+            {
+                SendUnicodeInput(c, false);
+                SendUnicodeInput(c, true);
+            }
+            PreciseSleep(6, token);
+        }
+    }
+
+    private static void SendUnicodeInput(char c, bool isKeyUp)
+    {
+        var input = new Win32Api.INPUT
+        {
+            type = Win32Api.INPUT_KEYBOARD,
+            u = new Win32Api.InputUnion
+            {
+                ki = new Win32Api.KEYBDINPUT
+                {
+                    wVk = 0,
+                    wScan = c,
+                    dwFlags = Win32Api.KEYEVENTF_UNICODE | (isKeyUp ? Win32Api.KEYEVENTF_KEYUP : 0),
+                    time = 0,
+                    dwExtraInfo = UIntPtr.Zero
+                }
+            }
+        };
+
+        Win32Api.SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Win32Api.INPUT)));
+    }
+
     /// <summary>Releases every key and mouse button this simulator is still holding down.</summary>
     public void ReleaseAllInputs()
     {

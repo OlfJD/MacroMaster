@@ -40,15 +40,29 @@ public static class StepChoices
         new(MouseButtonType.XButton1, "side button 4"),
         new(MouseButtonType.XButton2, "side button 5"),
     };
+
+    /// <summary>Values are the command names <c>InputSimulator.SendMediaCommand</c> understands.</summary>
+    public static List<Choice> MediaCommands { get; } = new()
+    {
+        new("PlayPause", "Play / pause"),
+        new("Next", "Next track"),
+        new("Prev", "Previous track"),
+        new("Stop", "Stop"),
+        new("VolumeUp", "Volume up"),
+        new("VolumeDown", "Volume down"),
+        new("Mute", "Mute"),
+    };
 }
 
-/// <summary>Picks the inline editor for a step: key, mouse, wait or move.</summary>
+/// <summary>Picks the inline editor for a step: key, mouse, wait, move, text or media key.</summary>
 public sealed class StepTemplateSelector : DataTemplateSelector
 {
     public DataTemplate? KeyTemplate { get; set; }
     public DataTemplate? MouseTemplate { get; set; }
     public DataTemplate? WaitTemplate { get; set; }
     public DataTemplate? MoveTemplate { get; set; }
+    public DataTemplate? TextTemplate { get; set; }
+    public DataTemplate? MediaTemplate { get; set; }
     public DataTemplate? OtherTemplate { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) => item is MacroAction a
@@ -58,6 +72,8 @@ public sealed class StepTemplateSelector : DataTemplateSelector
             ActionType.MouseClick or ActionType.MouseDown or ActionType.MouseUp or ActionType.MouseScroll => MouseTemplate,
             ActionType.Delay => WaitTemplate,
             ActionType.MouseMoveRelative or ActionType.MouseMoveAbsolute => MoveTemplate,
+            ActionType.Text => TextTemplate,
+            ActionType.Media => MediaTemplate,
             _ => OtherTemplate
         }
         : null;

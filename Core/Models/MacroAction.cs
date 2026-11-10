@@ -129,6 +129,15 @@ public class MacroAction : INotifyPropertyChanged
         set { _isCapturingKey = value; OnPropertyChanged(); }
     }
 
+    // Editor-only: this step is being dragged to a new position
+    private bool _isDragging;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsDragging
+    {
+        get => _isDragging;
+        set { _isDragging = value; OnPropertyChanged(); }
+    }
+
     public string DisplayText
     {
         get

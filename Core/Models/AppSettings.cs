@@ -18,6 +18,9 @@ public class AppSettings
     public bool MasterEngineEnabled { get; set; } = true;
     public string EmergencyKillswitchKey { get; set; } = "F12";
 
+    /// <summary>Key that brings the MacroMaster window in front of everything (and sends it back again). "" = off.</summary>
+    public string QuickOpenKey { get; set; } = string.Empty;
+
     // HUD / OSD Overlay Settings
     public bool ShowHudOverlay { get; set; } = true;
     public HudPosition OverlayPosition { get; set; } = HudPosition.TopRight;

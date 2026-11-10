@@ -8,21 +8,42 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using MacroMaster.Core.Models;
 using MacroMaster.Core.Native;
+using MacroMaster.UI.Editor;
+using MacroMaster.UI.Windows;
 using Brush = System.Windows.Media.Brush;
 
-namespace MacroMaster.UI.Windows;
+namespace MacroMaster.UI.Views;
 
 /// <summary>
-/// Create / edit a macro in three numbered parts: 1 Hotkey, 2 Steps, 3 How often
+/// Create / edit a macro in three numbered parts: 1 Hotkey, 2 How often, 3 Steps
 /// (+ collapsed "More options"). Steps are edited inline in their rows.
+/// Shown as a page inside the main window (see MainWindow.OpenEditor); raises
+/// <see cref="Finished"/> when the user saves or goes back.
 /// </summary>
-public partial class MacroEditorDialog : Window
+public partial class MacroEditorView : System.Windows.Controls.UserControl
 {
     public MacroDefinition Macro { get; private set; }
+
+    /// <summary>True = saved (read <see cref="Macro"/>), false = cancelled.</summary>
+    public event Action<bool>? Finished;
+
+    private Window? _hostWindow;
     public ObservableCollection<MacroAction> Actions { get; } = new();
 
     /// <summary>Every other macro (with its profile), for hotkey-conflict warnings.</summary>
     private readonly List<(MacroDefinition Macro, MacroProfile Profile)> _others;
+
+    /// <summary>Profile the macro lives in (mode groups are per profile).</summary>
+    private readonly MacroProfile? _profile;
+
+    // "Only while this app is in front" ("" = any app) and the mode-group switch key
+    private string _processFilter = string.Empty;
+    private string _armingKey = string.Empty;
+    private List<RunningApp> _apps = new();
+
+    // Switch-key capture
+    private bool _capturingArmKey;
+    private LowLevelKeyboardHook? _armHook;
 
     // Hotkey being edited (written to Macro.Trigger on save)
     private string _primaryKey = string.Empty;
@@ -49,13 +70,14 @@ public partial class MacroEditorDialog : Window
     private readonly Dictionary<MouseButtonType, long> _mouseDownTimestamps = new();
     private readonly Dictionary<int, long> _keyDownTimestamps = new();
 
-    public MacroEditorDialog(MacroDefinition? existingMacro = null,
-                             IEnumerable<(MacroDefinition Macro, MacroProfile Profile)>? allMacros = null)
+    public MacroEditorView(MacroDefinition? existingMacro = null,
+                           IEnumerable<(MacroDefinition Macro, MacroProfile Profile)>? allMacros = null,
+                           MacroProfile? profile = null)
     {
         InitializeComponent();
-        WindowHelper.Attach(this, RootGrid);
 
         Macro = existingMacro != null ? CloneMacro(existingMacro) : new MacroDefinition { Name = string.Empty, Category = string.Empty };
+        _profile = profile;
         _others = (allMacros ?? Enumerable.Empty<(MacroDefinition, MacroProfile)>())
             .Where(x => x.Macro.Id != Macro.Id).ToList();
 
@@ -75,18 +97,30 @@ public partial class MacroEditorDialog : Window
         UpdateSummary();
 
         TxtName.TextChanged += (_, _) => UpdateFooter();
+        RadioHold.Checked += (_, _) => UpdateFooter();
+        RadioHold.Unchecked += (_, _) => UpdateFooter();
+        _loadedState = CurrentState();
 
-        // Stop listening for keys when the user switches away mid-capture
-        Deactivated += (_, _) =>
+        Loaded += (_, _) =>
         {
-            StopHotkeyCapture();
-            StopStepKeyCapture();
+            // Stop listening for keys when the user switches away mid-capture
+            _hostWindow = Window.GetWindow(this);
+            if (_hostWindow != null) _hostWindow.Deactivated += HostWindow_Deactivated;
+            if (existingMacro == null) TxtName.Focus();
         };
-
-        if (existingMacro == null)
+        Unloaded += (_, _) =>
         {
-            Loaded += (_, _) => TxtName.Focus();
-        }
+            if (_hostWindow != null) _hostWindow.Deactivated -= HostWindow_Deactivated;
+            _hostWindow = null;
+            StopEverything(); // never leave a keyboard / mouse hook behind
+        };
+    }
+
+    private void HostWindow_Deactivated(object? sender, EventArgs e)
+    {
+        StopHotkeyCapture();
+        StopStepKeyCapture();
+        StopArmKeyCapture();
     }
 
     #region Load / save
@@ -96,7 +130,7 @@ public partial class MacroEditorDialog : Window
         TxtName.Text = Macro.Name;
         TxtDescription.Text = Macro.Description;
         TxtCategory.Text = Macro.Category == "General" ? string.Empty : Macro.Category;
-        TxtProcess.Text = Macro.ProcessFilter is "*" or "" ? string.Empty : Macro.ProcessFilter;
+        SetProcessFilter(Macro.ProcessFilter is "*" or "" ? string.Empty : Macro.ProcessFilter.Trim());
 
         _primaryKey = Macro.Trigger.PrimaryKey;
         _chordKeys = new List<string>(Macro.Trigger.ChordKeys);
@@ -105,20 +139,23 @@ public partial class MacroEditorDialog : Window
         _alt = Macro.Trigger.RequireAlt;
         _win = Macro.Trigger.RequireWin;
 
-        RadioOnce.IsChecked = Macro.Mode is ExecutionMode.Once or ExecutionMode.HoldWhileDown;
+        RadioOnce.IsChecked = Macro.Mode == ExecutionMode.Once;
         RadioRepeat.IsChecked = Macro.Mode == ExecutionMode.RepeatCount;
         RadioLoop.IsChecked = Macro.Mode == ExecutionMode.Toggle;
+        RadioHold.IsChecked = Macro.Mode == ExecutionMode.HoldWhileDown;
         TxtRepeatCount.Text = Math.Max(2, Macro.RepeatCount).ToString();
 
         ChkRequiresArming.IsChecked = Macro.RequiresArming;
-        TxtArmingKey.Text = Macro.ArmingKey;
-        TxtArmingName.Text = Macro.ArmingDisplayName;
+        _armingKey = Macro.ArmingKey;
+        TxtArmingName.Text = Macro.RequiresArming ? Macro.ModeShortName : string.Empty;
         TxtArmingGroup.Text = Macro.ArmingGroupName;
         ArmingConfigPanel.Visibility = Macro.RequiresArming ? Visibility.Visible : Visibility.Collapsed;
+        ShowArmKey();
+        UpdateGroupInfo();
 
         // Open "More options" straight away if this macro actually uses any of them
         MoreToggle.IsChecked = Macro.RequiresArming || !string.IsNullOrWhiteSpace(Macro.Description) ||
-                               !string.IsNullOrWhiteSpace(TxtProcess.Text) || !string.IsNullOrWhiteSpace(TxtCategory.Text);
+                               !string.IsNullOrWhiteSpace(_processFilter) || !string.IsNullOrWhiteSpace(TxtCategory.Text);
 
         ShowHotkey();
     }
@@ -133,29 +170,39 @@ public partial class MacroEditorDialog : Window
                    : "Untitled macro";
         Macro.Description = TxtDescription.Text.Trim();
         Macro.Category = string.IsNullOrWhiteSpace(TxtCategory.Text) ? "General" : TxtCategory.Text.Trim();
-        Macro.ProcessFilter = string.IsNullOrWhiteSpace(TxtProcess.Text) ? "*" : TxtProcess.Text.Trim();
+        Macro.ProcessFilter = string.IsNullOrWhiteSpace(_processFilter) ? "*" : _processFilter;
 
         Macro.Trigger = BuildTrigger();
 
         Macro.Mode = RadioLoop.IsChecked == true ? ExecutionMode.Toggle
+                   : RadioHold.IsChecked == true ? ExecutionMode.HoldWhileDown
                    : RadioRepeat.IsChecked == true ? ExecutionMode.RepeatCount
                    : ExecutionMode.Once;
         if (int.TryParse(TxtRepeatCount.Text, out int rep)) Macro.RepeatCount = Math.Clamp(rep, 1, 10000);
 
         Macro.RequiresArming = ChkRequiresArming.IsChecked == true;
-        Macro.ArmingKey = TxtArmingKey.Text.Trim();
-        Macro.ArmingDisplayName = TxtArmingName.Text.Trim();
+        Macro.ArmingKey = _armingKey;
+        Macro.ArmingDisplayName = string.IsNullOrWhiteSpace(TxtArmingName.Text) ? Macro.Name : TxtArmingName.Text.Trim();
         Macro.ArmingGroupName = TxtArmingGroup.Text.Trim();
+        // Exactly one mode per group is active: keep the group's current one, or take over if there is none
+        Macro.IsCurrentlyArmed = Macro.RequiresArming && !GroupMembers().Any(m => m.IsCurrentlyArmed);
 
         Macro.Actions = new ObservableCollection<MacroAction>(Actions);
 
-        DialogResult = true;
+        Finished?.Invoke(true);
     }
 
     private void CancelBtn_Click(object sender, RoutedEventArgs e)
     {
         StopEverything();
-        DialogResult = false;
+        if (HasUnsavedChanges && Window.GetWindow(this) is { } owner &&
+            !ConfirmDialog.Show(owner, "Discard your changes?",
+                                "You've changed this macro. If you go back now, those changes are lost.",
+                                "Discard", "Keep editing", danger: true))
+        {
+            return;
+        }
+        Finished?.Invoke(false);
     }
 
     private void StopEverything()
@@ -163,13 +210,27 @@ public partial class MacroEditorDialog : Window
         StopRecording();
         StopHotkeyCapture();
         StopStepKeyCapture();
+        StopArmKeyCapture();
+        EndStepDrag();
     }
 
-    protected override void OnClosed(EventArgs e)
-    {
-        base.OnClosed(e);
-        StopEverything();
-    }
+    #endregion
+
+    #region Unsaved changes
+
+    /// <summary>Everything the user can edit, flattened to one string; compared against the value at load.</summary>
+    private string _loadedState = string.Empty;
+
+    private string CurrentState() => string.Join("\u001F",
+        TxtName.Text, TxtDescription.Text, TxtCategory.Text, _processFilter,
+        _primaryKey, string.Join(",", _chordKeys), _ctrl, _shift, _alt, _win,
+        RadioOnce.IsChecked, RadioRepeat.IsChecked, RadioLoop.IsChecked, RadioHold.IsChecked, TxtRepeatCount.Text,
+        ChkRequiresArming.IsChecked, _armingKey, TxtArmingName.Text, TxtArmingGroup.Text,
+        string.Join(";", Actions.Select(a =>
+            $"{a.Type}|{a.Key}|{a.MouseButton}|{a.MouseDelta}|{a.MoveX}|{a.MoveY}|{a.DelayMs}|{a.RandomJitterMs}|{a.TextContent}|{a.MediaCommand}")));
+
+    /// <summary>True once anything differs from what was loaded (a blank new macro counts as unchanged).</summary>
+    public bool HasUnsavedChanges => CurrentState() != _loadedState;
 
     #endregion
 
@@ -200,6 +261,7 @@ public partial class MacroEditorDialog : Window
         BtnClearHotkey.Visibility = !_capturingHotkey && !string.IsNullOrEmpty(_primaryKey) ? Visibility.Visible : Visibility.Collapsed;
 
         UpdateConflict();
+        UpdateGroupInfo();
         UpdateFooter();
     }
 
@@ -348,7 +410,8 @@ public partial class MacroEditorDialog : Window
         string mine = Signature(BuildTrigger());
         bool iArm = ChkRequiresArming.IsChecked == true;
         var clash = _others.FirstOrDefault(o =>
-            o.Macro.IsEnabled && Signature(o.Macro.Trigger) == mine && !(iArm && o.Macro.RequiresArming));
+            o.Macro.IsEnabled && Signature(o.Macro.Trigger) == mine &&
+            !(iArm && o.Macro.RequiresArming && o.Macro.ModeGroupKey == CurrentGroupKey));
 
         if (clash.Macro == null)
         {
@@ -375,7 +438,7 @@ public partial class MacroEditorDialog : Window
 
     private void Action_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MacroAction.DelayMs) or nameof(MacroAction.Type) or nameof(MacroAction.Key))
+        if (e.PropertyName is nameof(MacroAction.DelayMs) or nameof(MacroAction.Type) or nameof(MacroAction.Key) or nameof(MacroAction.TextContent))
             UpdateSummary();
 
         // Switching a mouse step to "Scroll" with no amount yet: start at one notch
@@ -412,6 +475,21 @@ public partial class MacroEditorDialog : Window
         else if (Actions.Any(a => a.Type is ActionType.KeyTap or ActionType.KeyDown or ActionType.KeyUp && string.IsNullOrWhiteSpace(a.Key)))
         {
             hint = "A key step has no key yet — click its “Set key” button.";
+            warn = true;
+        }
+        else if (Actions.Any(a => a.Type == ActionType.Text && string.IsNullOrEmpty(a.TextContent)))
+        {
+            hint = "A “Type” step has no text yet.";
+            warn = true;
+        }
+        else if (RadioHold.IsChecked == true && string.IsNullOrEmpty(_primaryKey))
+        {
+            hint = "“While held” needs a hotkey to hold — set one under 1.";
+            warn = true;
+        }
+        else if (ChkRequiresArming.IsChecked == true && string.IsNullOrEmpty(_armingKey))
+        {
+            hint = "This macro is in a mode group but has no switch key yet — set one under More options.";
             warn = true;
         }
         else if (string.IsNullOrEmpty(_primaryKey))
@@ -453,6 +531,75 @@ public partial class MacroEditorDialog : Window
 
     private void AddMouseMove_Click(object sender, RoutedEventArgs e)
         => AddStep(new MacroAction { Type = ActionType.MouseMoveRelative, MoveX = 0, MoveY = 10 });
+
+    private void AddText_Click(object sender, RoutedEventArgs e)
+        => AddStep(new MacroAction { Type = ActionType.Text, TextContent = string.Empty });
+
+    private void AddMedia_Click(object sender, RoutedEventArgs e)
+        => AddStep(new MacroAction { Type = ActionType.Media, MediaCommand = "PlayPause" });
+
+    /// <summary>The "More" toolbar button opens its menu on a normal left click.</summary>
+    private void MoreSteps_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
+
+    #region Drag a step to a new position
+
+    // The mouse is captured by the list, not by the row's handle: moving a step re-creates its row,
+    // and a captured element that leaves the tree would end the drag after one position.
+    private MacroAction? _dragStep;
+
+    private void StepGrip_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (StepOf(sender) is not { } action) return;
+        StopStepKeyCapture();
+        _dragStep = action;
+        action.IsDragging = true;
+        ActionsList.CaptureMouse();
+        e.Handled = true;
+    }
+
+    private void ActionsList_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_dragStep == null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { EndStepDrag(); return; }
+
+        int from = Actions.IndexOf(_dragStep);
+        if (from < 0) { EndStepDrag(); return; }
+
+        // Take the place of whichever row the pointer is over
+        double y = e.GetPosition(ActionsList).Y;
+        for (int i = 0; i < Actions.Count; i++)
+        {
+            if (ActionsList.ItemContainerGenerator.ContainerFromIndex(i) is not FrameworkElement row || row.ActualHeight <= 0) continue;
+            double top = row.TranslatePoint(new System.Windows.Point(0, 0), ActionsList).Y;
+            if (y < top || y >= top + row.ActualHeight) continue;
+
+            if (i != from)
+            {
+                Actions.Move(from, i);
+                RenumberSteps();
+            }
+            break;
+        }
+    }
+
+    private void ActionsList_MouseUp(object sender, MouseButtonEventArgs e) => EndStepDrag();
+
+    private void ActionsList_LostCapture(object sender, System.Windows.Input.MouseEventArgs e) => EndStepDrag();
+
+    private void EndStepDrag()
+    {
+        if (_dragStep == null) return;
+        _dragStep.IsDragging = false;
+        _dragStep = null;
+        if (ActionsList.IsMouseCaptured) ActionsList.ReleaseMouseCapture();
+    }
+
+    #endregion
 
     // Starters
     private void TemplateAutoClicker_Click(object sender, RoutedEventArgs e)
@@ -555,8 +702,248 @@ public partial class MacroEditorDialog : Window
 
     private void ChkRequiresArming_Checked(object sender, RoutedEventArgs e)
     {
-        ArmingConfigPanel.Visibility = ChkRequiresArming.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        bool on = ChkRequiresArming.IsChecked == true;
+        ArmingConfigPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        if (!IsLoaded) return;
+        if (on && string.IsNullOrWhiteSpace(TxtArmingName.Text) && !string.IsNullOrWhiteSpace(TxtName.Text))
+            TxtArmingName.Text = TxtName.Text.Trim();
+        UpdateConflict();
+        UpdateGroupInfo();
+        UpdateFooter();
+    }
+
+    #endregion
+
+    #region App picker ("Only while this app is in front")
+
+    private void SetProcessFilter(string exe)
+    {
+        _processFilter = exe.Trim().ToLowerInvariant();
+        if (_processFilter.Length > 0 && !_processFilter.EndsWith(".exe")) _processFilter += ".exe";
+
+        if (_processFilter.Length == 0)
+        {
+            AppPickerText.Text = "Any app";
+            AppPickerText.Foreground = Res("TextSecondaryBrush");
+            AppPickerSub.Visibility = Visibility.Collapsed;
+            AppPickerImage.Visibility = Visibility.Collapsed;
+            AppPickerGlyph.Visibility = Visibility.Visible;
+            return;
+        }
+
+        var app = _apps.FirstOrDefault(a => a.ExeName.Equals(_processFilter, StringComparison.OrdinalIgnoreCase));
+        AppPickerText.Foreground = Res("TextPrimaryBrush");
+        AppPickerText.Text = app != null ? app.DisplayName : _processFilter;
+        AppPickerSub.Text = app != null ? _processFilter : "Not running right now";
+        AppPickerSub.Visibility = Visibility.Visible;
+        AppPickerImage.Source = app?.Icon;
+        AppPickerImage.Visibility = app?.Icon != null ? Visibility.Visible : Visibility.Collapsed;
+        AppPickerGlyph.Visibility = app?.Icon != null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private async void AppPicker_Click(object sender, RoutedEventArgs e)
+    {
+        TxtAppSearch.Text = string.Empty;
+        AppList.ItemsSource = null;
+        AppListStatus.Text = "Looking for open apps…";
+        AppListStatus.Visibility = Visibility.Visible;
+        AppPopup.IsOpen = true;
+        AppPickerBtn.Tag = "open";
+        _ = Dispatcher.InvokeAsync(() => TxtAppSearch.Focus(), System.Windows.Threading.DispatcherPriority.Input);
+
+        try
+        {
+            _apps = await Task.Run(RunningApps.List);
+        }
+        catch
+        {
+            _apps = new List<RunningApp>();
+        }
+        FilterApps();
+        SetProcessFilter(_processFilter); // picks up the icon / window title of the current choice
+    }
+
+    private void AppPopup_Closed(object? sender, EventArgs e) => AppPickerBtn.Tag = null;
+
+    private void FilterApps()
+    {
+        string q = TxtAppSearch.Text.Trim();
+        var list = q.Length == 0 ? _apps
+            : _apps.Where(a => a.Title.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                               a.ExeName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        AppList.ItemsSource = list;
+        AppList.SelectedItem = list.FirstOrDefault(a => a.ExeName.Equals(_processFilter, StringComparison.OrdinalIgnoreCase));
+        AppListStatus.Visibility = list.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        AppListStatus.Text = _apps.Count == 0 ? "No open apps found. Start your game first, or browse for its .exe." : "Nothing matches.";
+    }
+
+    private void TxtAppSearch_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        if (AppPopup.IsOpen) FilterApps();
+    }
+
+    private void TxtAppSearch_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (AppList.ItemsSource is not List<RunningApp> list || list.Count == 0) return;
+        int i = AppList.SelectedIndex;
+        switch (e.Key)
+        {
+            case Key.Down: AppList.SelectedIndex = Math.Min(list.Count - 1, i + 1); break;
+            case Key.Up: AppList.SelectedIndex = Math.Max(0, i - 1); break;
+            case Key.Enter: PickApp((AppList.SelectedItem as RunningApp) ?? list[0]); break;
+            case Key.Escape: AppPopup.IsOpen = false; break;
+            default: return;
+        }
+        if (AppList.SelectedItem != null) AppList.ScrollIntoView(AppList.SelectedItem);
+        e.Handled = true;
+    }
+
+    private void AppList_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is FrameworkElement { DataContext: RunningApp app }) PickApp(app);
+    }
+
+    private void PickApp(RunningApp app)
+    {
+        SetProcessFilter(app.ExeName);
+        AppPopup.IsOpen = false;
+    }
+
+    private void AppAny_Click(object sender, RoutedEventArgs e)
+    {
+        SetProcessFilter(string.Empty);
+        AppPopup.IsOpen = false;
+    }
+
+    private void AppBrowse_Click(object sender, RoutedEventArgs e)
+    {
+        AppPopup.IsOpen = false;
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = "Pick the game or app",
+            Filter = "Programs (*.exe)|*.exe"
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+
+        string exe = System.IO.Path.GetFileName(dialog.FileName).ToLowerInvariant();
+        if (!_apps.Any(a => a.ExeName == exe))
+            _apps.Add(new RunningApp { ExeName = exe, Path = dialog.FileName, Icon = RunningApps.IconFor(dialog.FileName) });
+        SetProcessFilter(exe);
+    }
+
+    #endregion
+
+    #region Mode group
+
+    /// <summary>Group name as currently typed, normalised the way the engine compares it.</summary>
+    private string CurrentGroupKey => string.IsNullOrWhiteSpace(TxtArmingGroup.Text)
+        ? MacroDefinition.DefaultModeGroupName : TxtArmingGroup.Text.Trim();
+
+    /// <summary>Other macros in the same profile that are in the group being edited.</summary>
+    private List<MacroDefinition> GroupMembers()
+    {
+        string key = CurrentGroupKey;
+        return SameProfileOthers().Where(m => m.RequiresArming && m.ModeGroupKey == key).ToList();
+    }
+
+    private IEnumerable<MacroDefinition> SameProfileOthers() =>
+        _profile != null
+            ? _others.Where(o => o.Profile == _profile).Select(o => o.Macro)
+            : _others.Select(o => o.Macro);
+
+    private void TxtArmingGroup_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+    {
+        UpdateGroupInfo();
         if (IsLoaded) UpdateConflict();
+    }
+
+    /// <summary>Existing group names as quick picks + who else is in the chosen group.</summary>
+    private void UpdateGroupInfo()
+    {
+        if (!IsInitialized) return;
+
+        // Quick picks: groups that already exist in this profile
+        GroupSuggestions.Children.Clear();
+        var existing = SameProfileOthers().Where(m => m.RequiresArming).Select(m => m.ModeGroupKey).Distinct()
+                                          .Where(g => g != CurrentGroupKey).ToList();
+        foreach (var name in existing)
+        {
+            var chip = new System.Windows.Controls.Button
+            {
+                Style = (Style)FindResource("SecondaryButton"),
+                Height = 28,
+                Padding = new Thickness(10, 0, 10, 0),
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 6, 6),
+                Content = $"+ Join “{name}”",
+                ToolTip = "Put this macro in that group"
+            };
+            chip.Click += (_, _) => TxtArmingGroup.Text = name == MacroDefinition.DefaultModeGroupName ? string.Empty : name;
+            GroupSuggestions.Children.Add(chip);
+        }
+        GroupSuggestions.Visibility = existing.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Members of the chosen group
+        var members = GroupMembers();
+        if (members.Count == 0)
+        {
+            GroupMembersText.Text = "No other macros in this group yet. Give the other modes the same group name.";
+        }
+        else
+        {
+            string list = string.Join(", ", members.Select(m =>
+                string.IsNullOrWhiteSpace(m.ArmingKey) ? m.ModeShortName : $"{m.ModeShortName} ({m.ArmingKey})"));
+            string text = $"Switches with: {list}.";
+
+            string mine = Signature(BuildTrigger());
+            var differs = members.Where(m => mine.Length > 0 && Signature(m.Trigger) != mine).ToList();
+            if (differs.Count > 0)
+                text += $" Heads up: {(differs.Count == 1 ? "it uses" : "they use")} a different hotkey ({differs[0].Trigger.DisplayString}), so they won't actually share one.";
+            GroupMembersText.Text = text;
+        }
+        GroupMembersBox.Visibility = Visibility.Visible;
+    }
+
+    private void ShowArmKey()
+    {
+        ArmKeyText.Text = _capturingArmKey ? "Press a key…"
+                        : string.IsNullOrEmpty(_armingKey) ? "Set key"
+                        : _armingKey.ToUpperInvariant();
+        ArmKeyText.Foreground = Res(_capturingArmKey ? "AccentTextBrush"
+                                  : string.IsNullOrEmpty(_armingKey) ? "WarningBrush" : "TextPrimaryBrush");
+    }
+
+    private void ArmKey_Click(object sender, RoutedEventArgs e)
+    {
+        if (_capturingArmKey) { StopArmKeyCapture(); return; }
+        StopHotkeyCapture();
+        StopStepKeyCapture();
+
+        _capturingArmKey = true;
+        ShowArmKey();
+        _armHook = new LowLevelKeyboardHook();
+        _armHook.OnKeyDown += (vk, _) =>
+        {
+            if (!_capturingArmKey) return false;
+            string name = KeyName(vk);
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (vk != 0x1B) _armingKey = name; // Esc cancels
+                StopArmKeyCapture();
+                UpdateFooter();
+            });
+            return true;
+        };
+        _armHook.OnKeyUp += (_, _) => _capturingArmKey;
+        _armHook.Install();
+    }
+
+    private void StopArmKeyCapture()
+    {
+        _capturingArmKey = false;
+        _armHook?.Dispose();
+        _armHook = null;
+        if (IsInitialized) ShowArmKey();
     }
 
     #endregion
@@ -695,7 +1082,8 @@ public partial class MacroEditorDialog : Window
 
     private bool IsCursorOverThisWindow()
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
+        if (Window.GetWindow(this) is not { } window) return false;
+        var hwnd = new WindowInteropHelper(window).Handle;
         return GetCursorPos(out POINT p) && GetWindowRect(hwnd, out RECT r) &&
                p.X >= r.Left && p.X < r.Right && p.Y >= r.Top && p.Y < r.Bottom;
     }

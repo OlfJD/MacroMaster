@@ -61,6 +61,10 @@ public class AppIcon : TextBlock
         ["shield-alert"] = '',
         ["inbox"] = '',
         ["help"] = '',
+        ["apps"] = '',
+        ["link"] = '',
+        ["arrow-left"] = '',
+        ["arrow-right"] = '',
     };
 
     public static readonly DependencyProperty IconKeyProperty =

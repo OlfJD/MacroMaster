@@ -28,7 +28,7 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
    - Deep Obsidian stealth theme with Vivid Emerald, Cyan, and Violet accents (`UI/Themes/DarkTheme.xaml`).
    - Vector Lucide icon renderer (`UI/Controls/LucideIcon.cs`, `UI/Icons/LucideIcons.xaml`).
    - Floating glass HUD notification banner (`UI/Windows/HudOverlayWindow.xaml`).
-   - Macro timeline editor and live input recorder (`UI/Windows/MacroEditorDialog.xaml`).
+   - Macro timeline editor and live input recorder (`UI/Views/MacroEditorView.xaml`, a page inside the main window).
    - Active scripts inspector and profile management modal.
 
 ---
@@ -116,3 +116,41 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 - **HUD no longer steals focus**: the overlay window is `ShowActivated="False"`, and notifications are posted with `BeginInvoke` so the input hook returns immediately.
 - `Engine_OnStateRefreshed` uses `BeginInvoke` so macro worker threads don't block on the UI thread.
 - Autostart entry is compared exactly, so an old entry without `--autostart` gets upgraded.
+
+### Version 2.3.0 - App picker, visible mode groups, UI consistency (2026-11-10)
+- **App picker instead of typing an exe name** (`UI/Editor/RunningApps.cs`, macro editor → More options): "Only while this app is in front" opens a searchable list of apps that currently have a window (icon, window title, exe), plus "Any app" and "Browse for an .exe…" for games that aren't running. Stored value is unchanged (`destiny2.exe`), so old macros keep working.
+- **Mode groups are shown as one block in the macro list**: macros that share a hotkey and switch via a key (Wellskate / Groundskate) are grouped under a header with an accent rail, "N modes on one hotkey" and "Switch with [PgUp] Wellskate [PgDn] Groundskate"; the active mode is highlighted. Rows show "Active mode" or "Press PgDn to use" instead of the truncated yellow/grey label.
+- **Mode group editor**: the switch key is captured like every other key (click, press) instead of typed; existing groups are offered as "Join …" chips; the editor lists the other modes in the group and warns when they use a different hotkey. Saving keeps exactly one active mode per group, and an empty mode name falls back to the macro name. Missing switch key blocks saving with a footer hint.
+- Engine compares mode groups by the trimmed name (`ModeGroupKey`); popup reads "Mode: Wellskate".
+- Editor sections are numbered in reading order (1 Hotkey, 2 How often, 3 Steps).
+- Macro list "Mode" column is a plain pill ("Once", "Loop", "Repeat ×3"); the play icon there looked like a second Run button.
+- Hard-coded engine-card border color moved into the theme (`SuccessBorderBrush`); new shared `PickerButton`, `PopupPanel`, `PickerItem` styles.
+
+### Version 2.3.1 - UI consistency pass (2026-11-10)
+- **House rules written into the theme header** (`UI/Themes/DarkTheme.xaml`): type scale 11/12/13/14 (+16/22/24 headings), three radii (`RadiusSm` 5, `RadiusMd` 7, `RadiusLg` 10), control heights 32 standard / 28 compact, 32 page gutter / 24 dialog gutter. All one-off font sizes (10.5, 11.5, 12.5, 13.5), radii and heights in the windows were snapped onto these.
+- **Hover transitions**: every button, list row, menu item and dropdown item has a `Hover` layer that fades in (80 ms) and out (160 ms) via the shared `HoverIn` / `HoverOut` storyboards; row action buttons fade the same way.
+- **Keyboard focus ring** (`FocusRing`) on buttons, switches, segments, option cards and pickers; disabled state (45 % opacity) on every button, switch and input.
+- **Dialogs share one header**: 48 px high, 24 px gutter, `H2` title, icon-button close (editor, settings, new profile).
+- **Popups share one look**: combo dropdowns and context menus now use `PopupPanel` like the app picker.
+- New shared styles replace inline duplicates: `H3`, `RowTitle`, `Hint`, `Callout`, `Divider`, `IconTile` / `IconTileLg`, `SegmentGroup`, `GhostButtonSm`, `InputSm`, `KeycapSm`. New brushes replace hard-coded colors: `OnAccentBrush`, `OnDangerBrush`, `ScrimBrush`, `CaptionCloseBrush`.
+- **Macro list**: long names ellipsize instead of pushing the "Active mode" / "Running" tags out of view, descriptions ellipsize instead of being cut off, mode-group titles are no longer black-on-dark (`PlainList` sets a foreground), the mode pill stays visible on hovered rows.
+
+### Version 2.3.2 - In-window editor, bracket-linked mode groups, clean corners (2026-11-10)
+- **Macro editor is a page in the main window** instead of a second window: `MacroEditorDialog` (Window) became `UI/Views/MacroEditorView` (UserControl), hosted in `MainWindow.EditorHost` by `OpenEditor`. It replaces the sidebar + macro list while open (they are hidden, so Tab can't reach them), has a "← Macros / New macro" breadcrumb in the caption strip, and reports back through the `Finished(bool saved)` event. The status bar and the window's caption buttons stay visible. Dropping .ahk files is ignored while the editor is open.
+- **Mode groups**: the tinted block with the accent rail and the big icon tile is gone. A group is now a quiet one-line label in the name column (small icon, name, "N modes on one hotkey", switch chips) and a bracket on the left that links the group's switches. A group with one macro says "only mode so far".
+- **Corner seams fixed** (`UI/Controls/SmoothBorder.cs`): WPF's `Border` draws outline and fill as two anti-aliased shapes, which left a dark notch at every rounded corner on bright fills (primary button, switches). `SmoothBorder` draws both as one rounded rectangle. Every evenly outlined rounded border in the theme and windows uses it; use it for new ones too.
+- New `arrow-left` icon.
+
+### Version 2.4.0 - Hold-to-run, more step types, test run, macro menu, profile files (2026-11-10)
+- **"While held" mode works** (`Core/Engine/MacroEngine.cs`): `ExecutionMode.HoldWhileDown` existed in the model but the engine never ran it and the editor silently saved it as "Once". The hotkey now starts a loop (`StartLoop`) and letting go of that key or mouse button stops it (`_holdRuns`, `StopHeldMacros` from `HandleKeyUp` / mouse-up). From the Run button, where there is no key to release, it behaves like a loop. The editor has it as a fourth "How often" option and requires a hotkey for it.
+- **Text and media steps**: the engine now executes `ActionType.Text` (`InputSimulator.TypeText`, Unicode input so it is layout-independent, Enter for line breaks, 6 ms between characters). The editor's step toolbar has a "More" menu with Move the mouse, Type text and Media key; each has an inline row editor (`TextStepTemplate`, `MediaStepTemplate`, `StepChoices.MediaCommands`).
+- **Drag steps to reorder**: the step number is the handle. The list captures the mouse (not the row, which is re-created on every move); the dragged row is highlighted via `MacroAction.IsDragging`.
+- **Macro row right-click menu** (`MainWindow`): Edit, Duplicate (the copy starts switched off because it has the same hotkey), Move up / Move down (within its mode group, or among ungrouped macros), Move to another profile (keeps one active mode per group on both sides), Delete.
+- **Profile files**: right-click a profile → "Export to a file…" writes it as JSON in the same format as `profiles.json`. The "Import" button and drag-and-drop accept those files next to .ahk scripts; imported profiles get fresh ids, a unique name, and start switched off (`MacroJsonSerializer.ExportProfiles` / `ImportProfiles` / `CloneMacro`).
+
+### Version 2.4.1 - Menus, discard check, quick open, group label (2026-11-10)
+- **"Try it" removed** from the editor (button, countdown and `TestRequested` event).
+- **Right-click menus restyled** (`UI/Themes/DarkTheme.xaml`): menu items have an icon column (`MenuItem.Icon`, an `AppIcon`), and menu separators finally use the theme. WPF looks separators inside a menu up under `MenuItem.SeparatorStyleKey`, not the implicit `Separator` style, so they had the system look (indented, running past the right edge). Macro, profile and the editor's "More" menu all carry icons; new `arrow-right` icon.
+- **Unsaved changes**: leaving the editor (breadcrumb or Cancel) asks "Discard your changes?" when anything differs from what was loaded (`MacroEditorView.HasUnsavedChanges`, a flattened snapshot of every editable value). Really quitting the app with a half-edited macro asks too.
+- **Quick open key** (Settings → Global keys, `AppSettings.QuickOpenKey`, off by default): a single key that brings the window in front of everything (`WindowHelper.ForceToFront`, via `AttachThreadInput` + `SetForegroundWindow`), e.g. to make a macro mid-game; pressed again while MacroMaster is in front it hides/minimizes again. Handled in the engine hook right after the kill switch, so it also works while the engine is paused. It can't be the same key as the kill switch.
+- **Mode group label**: the small icon and grey text are gone; the group name is set like a macro name (same column, primary colour, semibold) followed by a count pill ("2 modes"). Bracket and "Switch with" chips unchanged.
