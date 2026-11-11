@@ -12,9 +12,16 @@ public static class MacroJsonSerializer
         PropertyNameCaseInsensitive = true
     };
 
+    /// <summary>
+    /// Where profiles and settings live. Set the MACROMASTER_DATA_DIR environment variable to use
+    /// another folder (a portable copy, or a throw-away one for trying things out).
+    /// </summary>
     public static string GetAppDataDirectory()
     {
-        string path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroMaster");
+        string? custom = Environment.GetEnvironmentVariable("MACROMASTER_DATA_DIR");
+        string path = !string.IsNullOrWhiteSpace(custom)
+            ? custom
+            : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroMaster");
         if (!Directory.Exists(path))
         {
             Directory.CreateDirectory(path);
@@ -128,6 +135,76 @@ public static class MacroJsonSerializer
         }
         return profiles;
     }
+
+    #region Single macros
+
+    /// <summary>What an importable .json file holds.</summary>
+    public enum ImportKind { Unknown, Profiles, Macros }
+
+    /// <summary>
+    /// Tells a profile file from a macro file by the one property each always has
+    /// (a profile has "Macros", a macro has "Actions"). Unknown for anything else, unreadable files included.
+    /// </summary>
+    public static ImportKind DetectImportKind(string filePath)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(File.ReadAllText(filePath));
+            var elements = doc.RootElement.ValueKind == JsonValueKind.Array
+                ? doc.RootElement.EnumerateArray().ToList()
+                : new List<JsonElement> { doc.RootElement };
+            if (elements.Count == 0 || elements.Any(el => el.ValueKind != JsonValueKind.Object)) return ImportKind.Unknown;
+
+            bool Has(JsonElement el, string name) => el.EnumerateObject().Any(p => p.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
+            if (elements.All(el => Has(el, nameof(MacroProfile.Macros)))) return ImportKind.Profiles;
+            if (elements.All(el => Has(el, nameof(MacroDefinition.Actions)))) return ImportKind.Macros;
+            return ImportKind.Unknown;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return ImportKind.Unknown;
+        }
+    }
+
+    /// <summary>Writes one or more macros to a file the user picked, to share or back up on their own.</summary>
+    public static void ExportMacros(IEnumerable<MacroDefinition> macros, string filePath)
+        => File.WriteAllText(filePath, JsonSerializer.Serialize(macros.ToList(), Options));
+
+    /// <summary>
+    /// Reads macros from an exported macro file (a list, or a single macro object). Each gets a new
+    /// id and comes in switched off and not as the active mode: its hotkey may already be in use
+    /// here, and a file from someone else shouldn't go live the moment it's opened.
+    /// Throws <see cref="InvalidDataException"/> if the file isn't a macro file.
+    /// </summary>
+    public static List<MacroDefinition> ImportMacros(string filePath)
+    {
+        if (DetectImportKind(filePath) != ImportKind.Macros) throw new InvalidDataException("This isn't a MacroMaster macro file.");
+
+        using var doc = JsonDocument.Parse(File.ReadAllText(filePath));
+        var elements = doc.RootElement.ValueKind == JsonValueKind.Array
+            ? doc.RootElement.EnumerateArray().ToList()
+            : new List<JsonElement> { doc.RootElement };
+
+        var macros = new List<MacroDefinition>();
+        foreach (var el in elements)
+        {
+            MacroDefinition? m;
+            try { m = el.Deserialize<MacroDefinition>(Options); }
+            catch (JsonException ex) { throw new InvalidDataException("This isn't a MacroMaster macro file.", ex); }
+            if (m == null) continue;
+
+            m.Id = Guid.NewGuid().ToString("N");
+            m.Trigger ??= new MacroTrigger();
+            m.Actions ??= new();
+            m.IsEnabled = false;
+            m.IsCurrentlyArmed = false;
+            macros.Add(m);
+        }
+        if (macros.Count == 0) throw new InvalidDataException("This file contains no macros.");
+        return macros;
+    }
+
+    #endregion
 
     /// <summary>An independent copy of a macro with a new id (used by "Duplicate").</summary>
     public static MacroDefinition CloneMacro(MacroDefinition macro)

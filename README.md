@@ -50,6 +50,6 @@
   - Built-in live recorder to capture keypresses and mouse clicks in real time with exact millisecond timings.
 
 - **Safety & Performance**:
-  - **Emergency Killswitch (`F12`)**: Pressing `F12` immediately halts all running loops and releases all held mouse buttons and keys.
+  - **Engine on/off key (`F12`)**: Pressing `F12` switches the whole engine off: all running macros halt, held mouse buttons and keys are released, and every hotkey is ignored until you press it again.
   - **Multimedia High-Frequency Timer**: Activates Windows `timeBeginPeriod(1)` to eliminate standard 15.6ms OS timer jitter.
   - **System Tray Background App**: Runs silently in the Windows taskbar notification area with ~8-12 MB RAM footprint.

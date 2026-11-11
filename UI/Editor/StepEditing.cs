@@ -63,6 +63,10 @@ public sealed class StepTemplateSelector : DataTemplateSelector
     public DataTemplate? MoveTemplate { get; set; }
     public DataTemplate? TextTemplate { get; set; }
     public DataTemplate? MediaTemplate { get; set; }
+    public DataTemplate? MoveToTemplate { get; set; }
+    public DataTemplate? PixelTemplate { get; set; }
+    public DataTemplate? RepeatStartTemplate { get; set; }
+    public DataTemplate? RepeatEndTemplate { get; set; }
     public DataTemplate? OtherTemplate { get; set; }
 
     public override DataTemplate? SelectTemplate(object item, DependencyObject container) => item is MacroAction a
@@ -71,12 +75,36 @@ public sealed class StepTemplateSelector : DataTemplateSelector
             ActionType.KeyTap or ActionType.KeyDown or ActionType.KeyUp => KeyTemplate,
             ActionType.MouseClick or ActionType.MouseDown or ActionType.MouseUp or ActionType.MouseScroll => MouseTemplate,
             ActionType.Delay => WaitTemplate,
-            ActionType.MouseMoveRelative or ActionType.MouseMoveAbsolute => MoveTemplate,
+            ActionType.MouseMoveRelative => MoveTemplate,
+            ActionType.MouseMoveAbsolute => MoveToTemplate,
+            ActionType.WaitForPixel => PixelTemplate,
+            ActionType.RepeatStart => RepeatStartTemplate,
+            ActionType.RepeatEnd => RepeatEndTemplate,
             ActionType.Text => TextTemplate,
             ActionType.Media => MediaTemplate,
             _ => OtherTemplate
         }
         : null;
+}
+
+/// <summary>Indents a step row by how many repeat blocks it is inside (keeps the 6 px gap below each row).</summary>
+public sealed class DepthToMarginConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => new Thickness((value is int depth ? Math.Min(depth, 6) : 0) * 22, 0, 0, 6);
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
+/// <summary>"#RRGGBB" → a brush for the colour swatch of a "wait for pixel" step (transparent if not a colour).</summary>
+public sealed class HexToBrushConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => MacroAction.TryParseColor(value as string, out int r, out int g, out int b)
+            ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb((byte)r, (byte)g, (byte)b))
+            : System.Windows.Media.Brushes.Transparent;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
 /// <summary>Shows a key name as it appears on a keycap ("j" → "J"; empty → "Set key").</summary>

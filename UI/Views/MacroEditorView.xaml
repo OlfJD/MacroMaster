@@ -10,6 +10,8 @@
 
     <UserControl.Resources>
         <ed:KeyLabelConverter x:Key="KeyLabel"/>
+        <ed:DepthToMarginConverter x:Key="DepthMargin"/>
+        <ed:HexToBrushConverter x:Key="HexBrush"/>
 
         <!-- Numbered section heading: "1  Hotkey" + one plain sentence -->
         <Style x:Key="StepNumber" TargetType="{x:Type Border}">
@@ -165,6 +167,69 @@
             </StackPanel>
         </DataTemplate>
 
+        <!-- Move the pointer to an exact spot on the screen -->
+        <DataTemplate x:Key="MoveToStepTemplate" DataType="{x:Type models:MacroAction}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Move mouse to" Style="{StaticResource InlineText}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,8,0"/>
+                <TextBox Style="{StaticResource StepInput}" Text="{Binding MoveX, UpdateSourceTrigger=PropertyChanged}" ToolTip="Pixels from the left edge of the main screen"/>
+                <TextBlock Text="," Style="{StaticResource InlineText}" Margin="4,0,8,0"/>
+                <TextBox Style="{StaticResource StepInput}" Text="{Binding MoveY, UpdateSourceTrigger=PropertyChanged}" ToolTip="Pixels from the top edge of the main screen"/>
+                <Button Style="{StaticResource SecondaryButton}" Height="28" Padding="10,0" FontSize="12" Margin="10,0,0,0" Click="StepPick_Click"
+                        ToolTip="Click, then click the spot on your screen (right click or Esc cancels)">
+                    <TextBlock x:Name="PickText" Text="Pick"/>
+                </Button>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCapturingKey}" Value="True">
+                    <Setter TargetName="PickText" Property="Text" Value="Click the spot…"/>
+                    <Setter TargetName="PickText" Property="Foreground" Value="{StaticResource AccentTextBrush}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Wait until one screen pixel has a colour (e.g. an ability icon lighting up) -->
+        <DataTemplate x:Key="PixelStepTemplate" DataType="{x:Type models:MacroAction}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Wait for pixel" Style="{StaticResource InlineText}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,8,0"/>
+                <TextBox Style="{StaticResource StepInput}" Width="50" Text="{Binding MoveX, UpdateSourceTrigger=PropertyChanged}" ToolTip="Pixels from the left edge of the main screen"/>
+                <TextBlock Text="," Style="{StaticResource InlineText}" Margin="4,0,8,0"/>
+                <TextBox Style="{StaticResource StepInput}" Width="50" Text="{Binding MoveY, UpdateSourceTrigger=PropertyChanged}" ToolTip="Pixels from the top edge of the main screen"/>
+                <TextBlock Text="is" Style="{StaticResource InlineText}"/>
+                <Border Width="20" Height="20" CornerRadius="{StaticResource RadiusSm}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                        Background="{Binding TextContent, Converter={StaticResource HexBrush}}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                <TextBox Style="{StaticResource StepInput}" Width="78" Tag="#RRGGBB" Text="{Binding TextContent, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="The colour to wait for, e.g. #FFCC00. Close matches count."/>
+                <TextBlock Text="up to" Style="{StaticResource InlineText}"/>
+                <TextBox Style="{StaticResource StepInput}" Text="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}"
+                         ToolTip="If the colour hasn't shown up after this long, the rest of the macro is skipped (0 = wait forever)"/>
+                <TextBlock Text="ms" Style="{StaticResource InlineText}"/>
+                <Button Style="{StaticResource SecondaryButton}" Height="28" Padding="10,0" FontSize="12" Margin="2,0,0,0" Click="StepPick_Click"
+                        ToolTip="Click, then click the pixel on your screen: its position and colour are filled in (right click or Esc cancels)">
+                    <TextBlock x:Name="PickText" Text="Pick"/>
+                </Button>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsCapturingKey}" Value="True">
+                    <Setter TargetName="PickText" Property="Text" Value="Click the pixel…"/>
+                    <Setter TargetName="PickText" Property="Foreground" Value="{StaticResource AccentTextBrush}"/>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- Repeat block: everything between this row and its "End of repeat" row -->
+        <DataTemplate x:Key="RepeatStartStepTemplate" DataType="{x:Type models:MacroAction}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Repeat the steps below" Style="{StaticResource InlineText}" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,8,0"/>
+                <TextBox Style="{StaticResource StepInput}" Width="52" Text="{Binding RepeatCount, UpdateSourceTrigger=PropertyChanged}"/>
+                <TextBlock Text="times" Style="{StaticResource InlineText}"/>
+            </StackPanel>
+        </DataTemplate>
+
+        <DataTemplate x:Key="RepeatEndStepTemplate" DataType="{x:Type models:MacroAction}">
+            <TextBlock Text="End of repeat" Style="{StaticResource InlineText}" Margin="0"
+                       ToolTip="Drag this row to choose which steps are repeated"/>
+        </DataTemplate>
+
         <DataTemplate x:Key="OtherStepTemplate" DataType="{x:Type models:MacroAction}">
             <TextBlock Text="{Binding DisplayText}" Style="{StaticResource InlineText}" Margin="0"/>
         </DataTemplate>
@@ -176,11 +241,15 @@
                                  MoveTemplate="{StaticResource MoveStepTemplate}"
                                  TextTemplate="{StaticResource TextStepTemplate}"
                                  MediaTemplate="{StaticResource MediaStepTemplate}"
+                                 MoveToTemplate="{StaticResource MoveToStepTemplate}"
+                                 PixelTemplate="{StaticResource PixelStepTemplate}"
+                                 RepeatStartTemplate="{StaticResource RepeatStartStepTemplate}"
+                                 RepeatEndTemplate="{StaticResource RepeatEndStepTemplate}"
                                  OtherTemplate="{StaticResource OtherStepTemplate}"/>
 
         <!-- One step row: number, icon, inline editor, row actions -->
         <DataTemplate x:Key="StepRowTemplate" DataType="{x:Type models:MacroAction}">
-            <controls:SmoothBorder x:Name="Row" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="0,0,0,6">
+            <controls:SmoothBorder x:Name="Row" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" Padding="10,8" Margin="{Binding Depth, Converter={StaticResource DepthMargin}}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="26"/>
@@ -577,7 +646,8 @@
                                     </StackPanel>
                                 </Button>
                                 <!-- Less common steps live in a menu so the toolbar still fits at the minimum window width -->
-                                <Button Style="{StaticResource GhostButtonSm}" Click="MoreSteps_Click" ToolTip="Move the mouse, type text or press a media key">
+                                <Button Style="{StaticResource GhostButtonSm}" Click="MoreSteps_Click" AutomationProperties.Name="More steps"
+                                        ToolTip="Move the mouse, type text, press a media key, wait for a pixel or repeat steps">
                                     <StackPanel Orientation="Horizontal">
                                         <controls:AppIcon IconKey="plus" Size="12" Margin="0,0,6,0"/>
                                         <TextBlock Text="More" VerticalAlignment="Center"/>
@@ -593,6 +663,16 @@
                                             </MenuItem>
                                             <MenuItem Header="Media key" Click="AddMedia_Click" ToolTip="Play/pause, next track, volume…">
                                                 <MenuItem.Icon><controls:AppIcon IconKey="play" Size="16"/></MenuItem.Icon>
+                                            </MenuItem>
+                                            <Separator/>
+                                            <MenuItem Header="Move the mouse to a spot" Click="AddMoveTo_Click" ToolTip="Puts the pointer on an exact position on the screen">
+                                                <MenuItem.Icon><controls:AppIcon IconKey="crosshair" Size="16"/></MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Wait for a pixel colour" Click="AddPixel_Click" ToolTip="Waits until a spot on the screen has a certain colour, e.g. an ability icon lighting up">
+                                                <MenuItem.Icon><controls:AppIcon IconKey="monitor" Size="16"/></MenuItem.Icon>
+                                            </MenuItem>
+                                            <MenuItem Header="Repeat a block of steps" Click="AddRepeat_Click" ToolTip="Adds a start and an end row; the steps between them run several times">
+                                                <MenuItem.Icon><controls:AppIcon IconKey="repeat" Size="16"/></MenuItem.Icon>
                                             </MenuItem>
                                         </ContextMenu>
                                     </Button.ContextMenu>

@@ -10,7 +10,8 @@ public class TrayManager : IDisposable
     private readonly MacroEngine _engine;
     private readonly Action _onRestoreWindow;
 
-    public TrayManager(MacroEngine engine, Action onRestoreWindow)
+    /// <param name="onEngineToggled">Called after the tray menu switched the engine, so the new state gets saved.</param>
+    public TrayManager(MacroEngine engine, Action onRestoreWindow, Action? onEngineToggled = null)
     {
         _engine = engine;
         _onRestoreWindow = onRestoreWindow;
@@ -50,13 +51,17 @@ public class TrayManager : IDisposable
 
         var menu = new ContextMenuStrip();
         menu.Items.Add("Open MacroMaster", null, (s, e) => _onRestoreWindow());
-        var engineItem = menu.Items.Add("Pause engine", null, (s, e) => _engine.SetMasterEngineEnabled(!_engine.Settings.MasterEngineEnabled));
-        var stopItem = menu.Items.Add("Stop everything", null, (s, e) => _engine.EmergencyStop());
-        // Labels follow the current state and the configured kill-switch key
+        var engineItem = menu.Items.Add("Turn engine off", null, (s, e) =>
+        {
+            _engine.SetMasterEngineEnabled(!_engine.Settings.MasterEngineEnabled);
+            onEngineToggled?.Invoke();
+        });
+        // Label follows the current state and the configured engine on/off key
         menu.Opening += (s, e) =>
         {
-            engineItem.Text = _engine.Settings.MasterEngineEnabled ? "Pause engine" : "Resume engine";
-            stopItem.Text = $"Stop everything ({_engine.Settings.EmergencyKillswitchKey})";
+            string key = _engine.Settings.EngineToggleKey?.Trim() ?? string.Empty;
+            engineItem.Text = (_engine.Settings.MasterEngineEnabled ? "Turn engine off (stops everything)" : "Turn engine on")
+                              + (key.Length > 0 ? $"    {key}" : "");
         };
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (s, e) =>

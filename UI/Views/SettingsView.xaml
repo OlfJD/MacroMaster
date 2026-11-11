@@ -59,15 +59,16 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconTile}" Width="32" Height="32" Background="{StaticResource DangerSubtleBrush}" Margin="0,0,12,0">
-                                <controls:AppIcon IconKey="octagon-x" Size="16" Foreground="{StaticResource DangerBrush}"/>
+                                <controls:AppIcon IconKey="power" Size="16" Foreground="{StaticResource DangerBrush}"/>
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
-                                <TextBlock Text="Kill switch" Style="{StaticResource RowTitle}"/>
-                                <TextBlock Text="Stops every macro and releases all held keys and buttons." Style="{StaticResource Hint}"/>
+                                <TextBlock Text="Engine on / off" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="Flips the engine switch. Off stops every macro, releases all held keys and buttons, and ignores every hotkey until you press it again. Leave empty for no key."
+                                           Style="{StaticResource Hint}"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBox x:Name="TxtKillswitch" Style="{StaticResource HotkeyBox}" Text="F12"/>
-                                <Button x:Name="BtnCaptureKillswitch" Style="{StaticResource CaptureButton}" Content="Capture" Click="BtnCaptureKillswitch_Click" ToolTip="Click, then press a key"/>
+                                <TextBox x:Name="TxtEngineToggle" Style="{StaticResource HotkeyBox}" Text="F12" Tag="None"/>
+                                <Button x:Name="BtnCaptureEngineToggle" Style="{StaticResource CaptureButton}" Content="Capture" Click="BtnCaptureEngineToggle_Click" ToolTip="Click, then press a key"/>
                             </StackPanel>
                         </Grid>
 
@@ -140,6 +141,42 @@
                             <TextBox x:Name="TxtHudDuration" Grid.Column="1" Style="{StaticResource HotkeyBox}" Text="2200"/>
                             <TextBlock Grid.Column="2" Text="ms" Style="{StaticResource Caption}" VerticalAlignment="Center" Margin="8,0,0,0" Width="90"/>
                         </Grid>
+
+                        <Border Style="{StaticResource RowDivider}"/>
+
+                        <!-- Mode indicator: stays on screen (the banner above comes and goes) -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="Mode indicator" Style="{StaticResource RowTitle}"/>
+                                <TextBlock Text="A small label that stays on screen while a mode group's app is in front and shows the active mode. Clicks pass through it."
+                                           Style="{StaticResource Hint}"/>
+                            </StackPanel>
+                            <Button x:Name="BtnPreviewIndicator" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Show preview" VerticalAlignment="Center" Margin="0,0,12,0"
+                                    Click="BtnPreviewIndicator_Click" ToolTip="Shows the indicator for a few seconds, in the position chosen below"/>
+                            <CheckBox x:Name="ChkModeIndicator" Grid.Column="2" Style="{StaticResource Switch}" IsChecked="True" AutomationProperties.Name="Mode indicator"/>
+                        </Grid>
+
+                        <Border Style="{StaticResource RowDivider}"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Indicator position" Style="{StaticResource RowTitle}" VerticalAlignment="Center"/>
+                            <ComboBox x:Name="CmbIndicatorPosition" Grid.Column="1" Width="208">
+                                <ComboBoxItem Content="Top center"/>
+                                <ComboBoxItem Content="Top right"/>
+                                <ComboBoxItem Content="Bottom right"/>
+                                <ComboBoxItem Content="Bottom center"/>
+                                <ComboBoxItem Content="Top left (default)"/>
+                            </ComboBox>
+                        </Grid>
                     </StackPanel>
                 </controls:SmoothBorder>
 
@@ -185,6 +222,22 @@
                                 <TextBlock Text="Closing the window keeps hotkeys active from the tray." Style="{StaticResource Hint}"/>
                             </StackPanel>
                             <CheckBox x:Name="ChkCloseToTray" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True"/>
+                        </Grid>
+
+                        <Border Style="{StaticResource RowDivider}"/>
+
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="Administrator rights" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="TxtAdminHint" Style="{StaticResource Hint}"
+                                           Text="Windows hides key presses made in apps that run as administrator from normal programs, so hotkeys do nothing there. Restart MacroMaster as administrator to use it in those apps."/>
+                            </StackPanel>
+                            <Button x:Name="BtnRestartAsAdmin" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Restart as administrator"
+                                    VerticalAlignment="Center" Click="BtnRestartAsAdmin_Click"/>
                         </Grid>
                     </StackPanel>
                 </controls:SmoothBorder>

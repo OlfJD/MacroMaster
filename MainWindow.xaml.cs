@@ -64,13 +64,15 @@ public partial class MainWindow : Window
         _engine.Initialize(settings, profiles!);
         _engine.OnHudNotification += Engine_OnHudNotification;
         _engine.OnStateRefreshed += Engine_OnStateRefreshed;
+        _engine.OnSaveRequested += () => Dispatcher.BeginInvoke(SaveState); // hook thread; remember the active mode / engine switch
+        _engine.OnModeIndicatorChanged += text => Dispatcher.BeginInvoke(() => ApplyModeIndicator(text)); // watchdog / hook thread
         _engine.OnQuickOpenRequested += () => Dispatcher.BeginInvoke(ToggleQuickOpen); // raised on the hook thread
         if (!_engine.HooksActive)
         {
             Notify("Hotkeys couldn't start", "Windows refused the keyboard/mouse hook. Restart MacroMaster.", "octagon-x", "#F2555A", 8000);
         }
 
-        _trayManager = new TrayManager(_engine, ShowAndRestore);
+        _trayManager = new TrayManager(_engine, ShowAndRestore, SaveState);
 
         _isInitialized = true;
         RefreshProfiles();
@@ -116,6 +118,9 @@ public partial class MainWindow : Window
             settings.OverlayPosition = HudPosition.TopRight;
         }
 
+        // The separate kill switch key became the engine on/off key
+        settings.UpgradeLegacyKeys();
+
         // Exactly one profile is shown in the window
         var shown = profiles.FirstOrDefault(p => p.IsActive) ?? profiles.FirstOrDefault();
         foreach (var p in profiles) p.IsActive = p == shown;
@@ -153,6 +158,51 @@ public partial class MainWindow : Window
         _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs);
     }
 
+    #region Mode indicator
+
+    private ModeIndicatorWindow? _modeIndicator;
+    private System.Windows.Threading.DispatcherTimer? _previewTimer;
+
+    /// <summary>Shows, updates or hides the always-visible mode label (null = hide). A running preview wins.</summary>
+    private void ApplyModeIndicator(string? text)
+    {
+        if (_previewTimer?.IsEnabled == true) return;
+        if (text == null)
+        {
+            _modeIndicator?.Hide();
+            return;
+        }
+        _modeIndicator ??= new ModeIndicatorWindow();
+        _modeIndicator.ShowMode(text, _engine.Settings.ModeIndicatorPosition);
+    }
+
+    /// <summary>
+    /// Settings → "Show preview": shows the indicator for a few seconds no matter which app is in
+    /// front, with the mode that is active right now (or an example name if there are no mode groups).
+    /// </summary>
+    private void PreviewModeIndicator(HudPosition position)
+    {
+        string text = _engine.Profiles.SelectMany(p => p.Macros)
+                             .FirstOrDefault(m => m.RequiresArming && m.IsCurrentlyArmed)?.ModeShortName ?? "Wellskate";
+
+        _modeIndicator ??= new ModeIndicatorWindow();
+        _modeIndicator.ShowMode(text, position);
+
+        _previewTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _previewTimer.Tick -= PreviewTimer_Tick;
+        _previewTimer.Tick += PreviewTimer_Tick;
+        _previewTimer.Stop();
+        _previewTimer.Start();
+    }
+
+    private void PreviewTimer_Tick(object? sender, EventArgs e)
+    {
+        _previewTimer?.Stop();
+        ApplyModeIndicator(_engine.ModeIndicatorText); // back to what it should really show
+    }
+
+    #endregion
+
     private void Engine_OnHudNotification(string title, string subtitle, string iconKey, string accentColor)
     {
         _hudOverlay?.ShowNotification(title, subtitle, iconKey, accentColor, _engine.Settings.OverlayPosition, _engine.Settings.HudDurationMs);
@@ -174,15 +224,23 @@ public partial class MainWindow : Window
         bool on = s.MasterEngineEnabled;
 
         MasterEngineSwitchBox.IsChecked = on;
-        EngineTitle.Text = on ? "Engine running" : "Engine paused";
+        EngineTitle.Text = on ? "Engine running" : "Engine off";
         EngineSubtitle.Text = on ? "Hotkeys are live" : "All hotkeys ignored";
         EngineDot.Fill = Res(on ? "SuccessBrush" : "TextMutedBrush");
         EngineCard.Background = Res(on ? "SuccessSubtleBrush" : "SurfaceBrush");
         EngineCard.BorderBrush = Res(on ? "SuccessBorderBrush" : "BorderBrush");
 
         StatusDot.Fill = Res(on ? "SuccessBrush" : "TextMutedBrush");
-        StatusEngineText.Text = on ? "Engine running" : "Engine paused";
-        StatusKillKey.Text = string.IsNullOrWhiteSpace(s.EmergencyKillswitchKey) ? "F12" : s.EmergencyKillswitchKey;
+        StatusEngineText.Text = on ? "Engine running" : "Engine off";
+        bool hasToggleKey = !string.IsNullOrWhiteSpace(s.EngineToggleKey);
+        StatusToggleHint.Visibility = hasToggleKey ? Visibility.Visible : Visibility.Collapsed;
+        StatusToggleLabel.Text = on ? "Stop everything" : "Turn back on";
+        StatusToggleKey.Text = hasToggleKey ? s.EngineToggleKey.Trim() : string.Empty;
+
+        // An administrator app was in front: hotkeys can't reach it until MacroMaster is elevated too
+        bool blocked = _engine.HotkeysBlockedBy != null && !Environment.IsPrivilegedProcess;
+        AdminWarning.Visibility = blocked ? Visibility.Visible : Visibility.Collapsed;
+        if (blocked) AdminWarningText.Text = $"Hotkeys can't work in {_engine.HotkeysBlockedBy}: it runs as administrator";
 
         // Running / armed flags live on the models without change notification,
         // so re-render the rows only when that runtime state actually changed.
@@ -344,11 +402,13 @@ public partial class MainWindow : Window
         }
 
         string count = profile.Macros.Count == 1 ? "1 macro" : $"{profile.Macros.Count} macros";
-        if (!ConfirmDialog.Show(this, $"Delete \"{profile.Name}\"?", $"The profile and its {count} will be removed. This can't be undone.", "Delete profile", danger: true))
+        if (!ConfirmDialog.Show(this, $"Delete \"{profile.Name}\"?", $"The profile and its {count} will be removed. You can undo this right afterwards.", "Delete profile", danger: true))
             return;
 
         bool wasActive = profile == _engine.SelectedProfile;
-        _engine.Profiles.Remove(profile);
+        bool wasOn = profile.IsOn;
+        _engine.SetProfileOn(profile, false); // stops anything it still has running
+        Action restore = ProfileEdits.RemoveProfile(_engine.Profiles, profile);
         if (wasActive && _engine.Profiles.Count > 0)
         {
             ActivateProfile(_engine.Profiles[0]);
@@ -356,6 +416,17 @@ public partial class MainWindow : Window
         SaveState();
         RefreshProfiles();
         RefreshMacrosList();
+
+        OfferUndo($"Deleted profile “{profile.Name}”", () =>
+        {
+            restore();
+            profile.IsOn = wasOn;
+            if (wasActive) ActivateProfile(profile);
+            SaveState();
+            RefreshProfiles();
+            RefreshMacrosList();
+            SyncUiStates();
+        });
     }
 
     #endregion
@@ -421,14 +492,6 @@ public partial class MainWindow : Window
         if (FilterAll.IsChecked != true)
         {
             Dispatcher.BeginInvoke(() => { _macroView?.Refresh(); UpdateEmptyState(); });
-        }
-    }
-
-    private void MacroRunNow_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is FrameworkElement { DataContext: MacroDefinition macro })
-        {
-            _engine.ExecuteMacro(macro);
         }
     }
 
@@ -519,7 +582,7 @@ public partial class MainWindow : Window
         var others = _engine.Profiles.Where(p => p != _engine.SelectedProfile).ToList();
         if (others.Count == 0) return;
 
-        int at = menu.Items.Count - 2; // in front of the last separator + "Delete"
+        int at = menu.Items.Count - 4; // in front of the separator above "Export…" (then: separator, "Delete")
         menu.Items.Insert(at++, new System.Windows.Controls.Separator { Tag = "move-to" });
         foreach (var target in others)
         {
@@ -597,14 +660,173 @@ public partial class MainWindow : Window
 
     private void MacroDelete_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not FrameworkElement { DataContext: MacroDefinition macro }) return;
-        if (!ConfirmDialog.Show(this, $"Delete \"{macro.Name}\"?", "This macro and its steps will be removed. This can't be undone.", "Delete", danger: true))
-            return;
+        if (sender is not FrameworkElement { DataContext: MacroDefinition macro } || _engine.SelectedProfile is not { } profile) return;
 
-        _engine.SelectedProfile?.Macros.Remove(macro);
+        // No "are you sure?": the delete can be undone from the bar that appears (or Ctrl+Z)
+        Action restore = ProfileEdits.RemoveMacro(profile, macro);
         SaveState();
-        UpdateCounts();
+        RefreshMacrosList();
+
+        OfferUndo($"Deleted “{macro.Name}”", () =>
+        {
+            if (!_engine.Profiles.Contains(profile)) return; // its profile is gone too
+            restore();
+            SaveState();
+            if (_engine.SelectedProfile == profile) RefreshMacrosList();
+            else UpdateCounts();
+        });
     }
+
+    #region Undo (deleted macros and profiles)
+
+    private Action? _undoAction;
+    private System.Windows.Threading.DispatcherTimer? _undoTimer;
+
+    /// <summary>Shows "Deleted … · Undo" at the bottom of the list for a while. Only the last delete can be undone.</summary>
+    private void OfferUndo(string text, Action undo)
+    {
+        _undoAction = undo;
+        UndoText.Text = text;
+        UndoBar.Visibility = Visibility.Visible;
+        FadeIn(UndoBar);
+
+        _undoTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(10) };
+        _undoTimer.Tick -= UndoTimer_Tick;
+        _undoTimer.Tick += UndoTimer_Tick;
+        _undoTimer.Stop();
+        _undoTimer.Start();
+    }
+
+    private void UndoTimer_Tick(object? sender, EventArgs e) => HideUndo();
+
+    private void HideUndo()
+    {
+        _undoTimer?.Stop();
+        _undoAction = null;
+        UndoBar.Visibility = Visibility.Collapsed;
+    }
+
+    private void Undo_Click(object sender, RoutedEventArgs e) => RunUndo();
+
+    private void UndoDismiss_Click(object sender, RoutedEventArgs e) => HideUndo();
+
+    private void RunUndo()
+    {
+        var undo = _undoAction;
+        HideUndo();
+        undo?.Invoke();
+    }
+
+    /// <summary>Ctrl+Z undoes the last delete while the list is showing (text boxes keep their own Ctrl+Z).</summary>
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Z || Keyboard.Modifiers != ModifierKeys.Control) return;
+        if (_undoAction == null || IsEditorOpen) return;
+        if (Keyboard.FocusedElement is System.Windows.Controls.TextBox { Text.Length: > 0 }) return;
+
+        RunUndo();
+        e.Handled = true;
+    }
+
+    #endregion
+
+    #region Drag a macro to a new position
+
+    private MacroDefinition? _dragMacro;
+    private System.Windows.Point _dragStart;
+    private bool _dragging, _dragMoved;
+
+    private MacroDefinition? MacroAt(System.Windows.Point p) =>
+        FindAncestor<ListBoxItem>(MacrosListBox.InputHitTest(p) as DependencyObject)?.DataContext as MacroDefinition;
+
+    private void MacrosListBox_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        // Not from the switch, the row buttons or the scroll bar
+        if (e.OriginalSource is not DependencyObject src) return;
+        if (FindAncestor<ButtonBase>(src) != null || FindAncestor<System.Windows.Controls.Primitives.ScrollBar>(src) != null) return;
+
+        _dragMacro = FindAncestor<ListBoxItem>(src)?.DataContext as MacroDefinition;
+        _dragStart = e.GetPosition(MacrosListBox);
+        _dragging = _dragMoved = false;
+    }
+
+    private void MacrosListBox_PreviewMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (_dragMacro == null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { EndMacroDrag(); return; }
+
+        var pos = e.GetPosition(MacrosListBox);
+        if (!_dragging)
+        {
+            // A few pixels of slack, so a click or double click never starts a drag
+            if (Math.Abs(pos.Y - _dragStart.Y) < 6) return;
+            _dragging = true;
+            MacrosListBox.SelectedItem = _dragMacro;
+            // Captured by the list, not the row: moving a macro re-creates its row
+            MacrosListBox.CaptureMouse();
+            MacrosListBox.Cursor = System.Windows.Input.Cursors.SizeNS;
+        }
+
+        if (_engine.SelectedProfile is not { } profile) return;
+        if (!ProfileEdits.MoveOnto(profile.Macros, _dragMacro, MacroAt(pos))) return;
+
+        _dragMoved = true;
+        _macroView?.Refresh();
+        MacrosListBox.SelectedItem = _dragMacro;
+        MacrosListBox.UpdateLayout(); // so the next mouse move sees the rows in their new places
+    }
+
+    private void MacrosListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e) => EndMacroDrag();
+
+    private void MacrosListBox_LostMouseCapture(object sender, System.Windows.Input.MouseEventArgs e) => EndMacroDrag();
+
+    private void EndMacroDrag()
+    {
+        if (_dragMacro == null) return;
+        bool moved = _dragMoved;
+        _dragMacro = null;
+        _dragging = _dragMoved = false;
+        MacrosListBox.ClearValue(CursorProperty);
+        if (MacrosListBox.IsMouseCaptured) MacrosListBox.ReleaseMouseCapture();
+        if (moved) SaveState();
+    }
+
+    #endregion
+
+    #region Export a single macro
+
+    private void MacroExport_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MacroDefinition macro }) return;
+
+        var dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "Export macro",
+            Filter = "MacroMaster macro (*.json)|*.json",
+            FileName = SafeFileName(macro.Name, "macro") + ".json",
+            DefaultExt = ".json",
+            AddExtension = true
+        };
+        if (dialog.ShowDialog(this) != true) return;
+
+        try
+        {
+            MacroJsonSerializer.ExportMacros(new[] { macro }, dialog.FileName);
+            Notify("Macro exported", Path.GetFileName(dialog.FileName), "logo");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ConfirmDialog.Show(this, "The macro couldn't be exported", ex.Message, "OK", cancelText: null);
+        }
+    }
+
+    private static string SafeFileName(string name, string fallback)
+    {
+        string safe = string.Concat(name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
+        return safe.Length > 0 ? safe : fallback;
+    }
+
+    #endregion
 
     #endregion
 
@@ -636,8 +858,8 @@ public partial class MainWindow : Window
     {
         var dialog = new Microsoft.Win32.OpenFileDialog
         {
-            Title = "Import profiles or AutoHotkey scripts",
-            Filter = "Profiles and AutoHotkey scripts (*.json;*.ahk)|*.json;*.ahk|MacroMaster profiles (*.json)|*.json|AutoHotkey scripts (*.ahk)|*.ahk",
+            Title = "Import macros, profiles or AutoHotkey scripts",
+            Filter = "Macros, profiles and AutoHotkey scripts (*.json;*.ahk)|*.json;*.ahk|MacroMaster macros and profiles (*.json)|*.json|AutoHotkey scripts (*.ahk)|*.ahk",
             Multiselect = true
         };
         if (dialog.ShowDialog() == true)
@@ -656,13 +878,29 @@ public partial class MainWindow : Window
     private void ImportProfileFiles(IEnumerable<string> files)
     {
         MacroProfile? last = null;
-        int count = 0;
+        int count = 0, macroCount = 0;
         string? firstError = null;
 
         foreach (var file in files.Where(f => f.EndsWith(".json", StringComparison.OrdinalIgnoreCase)))
         {
             try
             {
+                // A .json file is either exported macros (added to the profile on screen) or whole profiles
+                var kind = MacroJsonSerializer.DetectImportKind(file);
+                if (kind == MacroJsonSerializer.ImportKind.Unknown) throw new InvalidDataException("This isn't a MacroMaster macro or profile file.");
+                if (kind == MacroJsonSerializer.ImportKind.Macros && _engine.SelectedProfile is { } into)
+                {
+                    foreach (var macro in MacroJsonSerializer.ImportMacros(file))
+                    {
+                        // The first mode of a group that doesn't exist here yet becomes its active one
+                        macro.IsCurrentlyArmed = macro.RequiresArming &&
+                            !into.Macros.Any(m => m.RequiresArming && m.ModeGroupKey == macro.ModeGroupKey);
+                        into.Macros.Add(macro);
+                        macroCount++;
+                    }
+                    continue;
+                }
+
                 foreach (var profile in MacroJsonSerializer.ImportProfiles(file))
                 {
                     profile.Name = UniqueProfileName(profile.Name);
@@ -688,6 +926,13 @@ public partial class MainWindow : Window
             Notify(count == 1 ? $"Imported “{last.Name}”" : $"Imported {count} profiles",
                    "Switched off for now — turn it on in the sidebar", "logo", durationMs: 4000);
         }
+        else if (macroCount > 0)
+        {
+            SaveState();
+            RefreshMacrosList();
+            Notify($"Imported {macroCount} macro{(macroCount == 1 ? "" : "s")}",
+                   macroCount == 1 ? "Switched off for now — turn it on in the list" : "Switched off for now — turn them on in the list", "logo", durationMs: 4000);
+        }
         if (firstError != null)
         {
             ConfirmDialog.Show(this, "A file couldn't be imported", firstError, "OK", cancelText: null);
@@ -709,7 +954,7 @@ public partial class MainWindow : Window
     {
         if (ProfileFromMenu(sender) is not { } profile) return;
 
-        string safeName = string.Concat(profile.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c)).Trim();
+        string safeName = SafeFileName(profile.Name, string.Empty);
         var dialog = new Microsoft.Win32.SaveFileDialog
         {
             Title = "Export profile",
@@ -792,15 +1037,53 @@ public partial class MainWindow : Window
         if (IsEditorOpen) return;
 
         var page = new SettingsView(_engine.Settings);
+        page.RestartAsAdminRequested += RestartAsAdministrator;
+        page.ModeIndicatorPreviewRequested += PreviewModeIndicator;
         page.Finished += saved =>
         {
             ClosePage();
             if (!saved) return;
             SaveState();
             SyncUiStates();
+            _engine.RefreshModeIndicator();
+            ApplyModeIndicator(_engine.ModeIndicatorText); // picks up a new position
             Notify("Settings saved", "Changes are live", "logo");
         };
         ShowPage(page);
+    }
+
+    private void RestartAsAdmin_Click(object sender, RoutedEventArgs e) => RestartAsAdministrator();
+
+    /// <summary>
+    /// Starts a second copy with administrator rights (Windows asks for permission) and closes this
+    /// one, so hotkeys also work in games and tools that run as administrator themselves.
+    /// </summary>
+    private void RestartAsAdministrator()
+    {
+        if (Environment.ProcessPath is not { } exe) return;
+
+        var editor = EditorHost.Children.OfType<MacroEditorView>().FirstOrDefault();
+        if (editor?.HasUnsavedChanges == true &&
+            !ConfirmDialog.Show(this, "Restart without saving?", "The macro you're editing has unsaved changes.", "Restart", "Keep editing", danger: true))
+        {
+            return;
+        }
+
+        SaveState();
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true, Verb = "runas" });
+        }
+        catch (Win32Exception)
+        {
+            return; // "No" in the Windows permission prompt: carry on as before
+        }
+
+        _trayManager?.Dispose();
+        _hudOverlay?.Close();
+        _modeIndicator?.Close();
+        _engine.Dispose();
+        System.Windows.Application.Current.Shutdown();
     }
 
     /// <summary>Shows a full page (macro editor, settings) in place of the sidebar + macro list.</summary>
@@ -876,6 +1159,7 @@ public partial class MainWindow : Window
 
             _trayManager?.Dispose();
             _hudOverlay?.Close();
+        _modeIndicator?.Close();
             _engine.Dispose();
             System.Windows.Application.Current.Shutdown();
         }

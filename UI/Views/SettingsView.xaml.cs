@@ -34,13 +34,21 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     private void LoadSettings()
     {
         // Hotkeys & Triggers
-        TxtKillswitch.Text = _settings.EmergencyKillswitchKey;
+        TxtEngineToggle.Text = _settings.EngineToggleKey;
         TxtQuickOpen.Text = _settings.QuickOpenKey;
+
+        if (Environment.IsPrivilegedProcess)
+        {
+            TxtAdminHint.Text = "MacroMaster is running as administrator, so hotkeys also work in apps that run as administrator.";
+            BtnRestartAsAdmin.Visibility = Visibility.Collapsed;
+        }
 
         // HUD / Overlay
         ChkShowOverlay.IsChecked = _settings.ShowHudOverlay;
         CmbHudPosition.SelectedIndex = (int)_settings.OverlayPosition;
         TxtHudDuration.Text = _settings.HudDurationMs.ToString();
+        ChkModeIndicator.IsChecked = _settings.ShowModeIndicator;
+        CmbIndicatorPosition.SelectedIndex = (int)_settings.ModeIndicatorPosition;
 
         // System
         ChkStartWithWindows.IsChecked = _settings.StartWithWindows;
@@ -50,9 +58,27 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
     #region Key & Mouse Capture Logic
 
-    private void BtnCaptureKillswitch_Click(object sender, RoutedEventArgs e)
+    private void BtnCaptureEngineToggle_Click(object sender, RoutedEventArgs e)
     {
-        ToggleCapture(TxtKillswitch, BtnCaptureKillswitch, allowMouse: false);
+        ToggleCapture(TxtEngineToggle, BtnCaptureEngineToggle, allowMouse: false);
+    }
+
+    /// <summary>
+    /// "Show preview": the main window shows the mode indicator for a few seconds at the position
+    /// picked here (saved or not), so it can be judged without starting the game.
+    /// </summary>
+    public event Action<HudPosition>? ModeIndicatorPreviewRequested;
+
+    private void BtnPreviewIndicator_Click(object sender, RoutedEventArgs e)
+        => ModeIndicatorPreviewRequested?.Invoke((HudPosition)Math.Max(0, CmbIndicatorPosition.SelectedIndex));
+
+    /// <summary>The main window does the restart (it owns the engine and the tray icon).</summary>
+    public event Action? RestartAsAdminRequested;
+
+    private void BtnRestartAsAdmin_Click(object sender, RoutedEventArgs e)
+    {
+        StopKeyCapture();
+        RestartAsAdminRequested?.Invoke();
     }
 
     private void BtnCaptureQuickOpen_Click(object sender, RoutedEventArgs e)
@@ -156,9 +182,14 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     {
         StopKeyCapture();
 
-        // One key can't do both jobs: the kill switch is checked first and would always win
+        // One key can't do both jobs: the engine key is checked first and would always win
         string quickOpen = TxtQuickOpen.Text.Trim();
-        string killSwitch = string.IsNullOrWhiteSpace(TxtKillswitch.Text) ? _settings.EmergencyKillswitchKey : TxtKillswitch.Text.Trim();
+        string engineKey = TxtEngineToggle.Text.Trim();
+        if (engineKey.Length > 0 && KeyHelper.NormalizeToVk(engineKey) == 0)
+        {
+            Windows.ConfirmDialog.Show(Window.GetWindow(this)!, "That engine key isn't recognised", $"“{engineKey}” isn't a key MacroMaster knows. Use Capture and press the key.", "OK", cancelText: null);
+            return;
+        }
         if (quickOpen.Length > 0)
         {
             int quickVk = KeyHelper.NormalizeToVk(quickOpen);
@@ -167,19 +198,14 @@ public partial class SettingsView : System.Windows.Controls.UserControl
                 Windows.ConfirmDialog.Show(Window.GetWindow(this)!,"That quick-open key isn't recognised", $"“{quickOpen}” isn't a key MacroMaster knows. Use Capture and press the key.", "OK", cancelText: null);
                 return;
             }
-            if (quickVk == KeyHelper.NormalizeToVk(killSwitch))
+            if (quickVk == KeyHelper.NormalizeToVk(engineKey))
             {
-                Windows.ConfirmDialog.Show(Window.GetWindow(this)!,"Pick a different quick-open key", "It's the same key as the kill switch, which would always win.", "OK", cancelText: null);
+                Windows.ConfirmDialog.Show(Window.GetWindow(this)!,"Pick a different quick-open key", "It's the same key as the engine on / off key, which would always win.", "OK", cancelText: null);
                 return;
             }
         }
         _settings.QuickOpenKey = quickOpen;
-
-        // Hotkeys & Triggers
-        if (!string.IsNullOrWhiteSpace(TxtKillswitch.Text))
-        {
-            _settings.EmergencyKillswitchKey = TxtKillswitch.Text.Trim();
-        }
+        _settings.EngineToggleKey = engineKey;
 
         // HUD / Overlay
         _settings.ShowHudOverlay = ChkShowOverlay.IsChecked == true;
@@ -188,6 +214,9 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         {
             _settings.HudDurationMs = Math.Max(500, dur);
         }
+
+        _settings.ShowModeIndicator = ChkModeIndicator.IsChecked == true;
+        _settings.ModeIndicatorPosition = (HudPosition)Math.Max(0, CmbIndicatorPosition.SelectedIndex);
 
         // System
         _settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;

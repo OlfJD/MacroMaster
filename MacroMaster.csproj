@@ -15,6 +15,13 @@
     <LangVersion>latest</LangVersion>
   </PropertyGroup>
 
+  <!-- The test project lives in a subfolder; keep its files out of the app itself -->
+  <ItemGroup>
+    <Compile Remove="Tests\**" />
+    <None Remove="Tests\**" />
+    <InternalsVisibleTo Include="MacroMaster.Tests" />
+  </ItemGroup>
+
   <ItemGroup>
     <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\app.png" />

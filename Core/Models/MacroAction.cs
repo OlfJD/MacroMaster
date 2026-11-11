@@ -16,7 +16,11 @@ public enum ActionType
     MouseMoveAbsolute,
     Delay,
     Text,
-    Media
+    Media,
+    // Added later: keep new values at the end, saved files store the number
+    WaitForPixel,   // wait until the pixel at MoveX/MoveY has the colour in TextContent (give up after DelayMs)
+    RepeatStart,    // repeat everything up to the matching RepeatEnd, RepeatCount times
+    RepeatEnd
 }
 
 public enum MouseButtonType
@@ -42,6 +46,8 @@ public class MacroAction : INotifyPropertyChanged
     private int _randomJitterMs = 0;
     private string _textContent = string.Empty;
     private string _mediaCommand = string.Empty;
+    private int _repeatCount = 2;
+    private int _depth;
 
     public ActionType Type
     {
@@ -120,7 +126,34 @@ public class MacroAction : INotifyPropertyChanged
         set { _mediaCommand = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayText)); }
     }
 
-    // Editor-only: this step's key button is waiting for a key press
+    /// <summary>How many times a <see cref="ActionType.RepeatStart"/> block runs.</summary>
+    public int RepeatCount
+    {
+        get => _repeatCount;
+        set { _repeatCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(DisplayText)); }
+    }
+
+    /// <summary>"#RRGGBB" (as stored in <see cref="TextContent"/>) → colour parts. False if it isn't a colour.</summary>
+    public static bool TryParseColor(string? text, out int r, out int g, out int b)
+    {
+        r = g = b = 0;
+        string s = (text ?? string.Empty).Trim().TrimStart('#');
+        if (s.Length != 6 || !int.TryParse(s, System.Globalization.NumberStyles.HexNumber, null, out int rgb)) return false;
+        r = (rgb >> 16) & 0xFF;
+        g = (rgb >> 8) & 0xFF;
+        b = rgb & 0xFF;
+        return true;
+    }
+
+    // Editor-only: how many repeat blocks this step sits inside (indents its row)
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int Depth
+    {
+        get => _depth;
+        set { if (_depth == value) return; _depth = value; OnPropertyChanged(); }
+    }
+
+    // Editor-only: this step's key button is waiting for a key press (or its "Pick" button for a click)
     private bool _isCapturingKey;
     [System.Text.Json.Serialization.JsonIgnore]
     public bool IsCapturingKey
@@ -156,6 +189,9 @@ public class MacroAction : INotifyPropertyChanged
                 ActionType.Delay => $"Wait: {DelayMs} ms" + (RandomJitterMs > 0 ? $" (±{RandomJitterMs}ms)" : ""),
                 ActionType.Text => $"Type: \"{TextContent}\"",
                 ActionType.Media => $"Media: {MediaCommand}",
+                ActionType.WaitForPixel => $"Wait for pixel {MoveX},{MoveY} = {TextContent}",
+                ActionType.RepeatStart => $"Repeat {RepeatCount}x",
+                ActionType.RepeatEnd => "End of repeat",
                 _ => Type.ToString()
             };
         }
@@ -174,6 +210,8 @@ public class MacroAction : INotifyPropertyChanged
                 ActionType.Delay => "clock",
                 ActionType.Text => "type",
                 ActionType.Media => "play",
+                ActionType.WaitForPixel => "monitor",
+                ActionType.RepeatStart or ActionType.RepeatEnd => "repeat",
                 _ => "zap"
             };
         }

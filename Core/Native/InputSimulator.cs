@@ -66,7 +66,7 @@ public class InputSimulator : IDisposable
         };
 
         _heldMouseButtons[button] = 0;
-        Win32Api.mouse_event(flag, 0, 0, data, UIntPtr.Zero);
+        SendMouseEvent(flag, 0, 0, data);
     }
 
     public void MouseUp(MouseButtonType button)
@@ -88,7 +88,7 @@ public class InputSimulator : IDisposable
             _ => 0
         };
 
-        Win32Api.mouse_event(flag, 0, 0, data, UIntPtr.Zero);
+        SendMouseEvent(flag, 0, 0, data);
         _heldMouseButtons.TryRemove(button, out _);
     }
 
@@ -102,12 +102,38 @@ public class InputSimulator : IDisposable
     public void MouseMoveRelative(int dx, int dy)
     {
         // Direct hardware-level mouse event (identical to DllCall("mouse_event", 1, dx, dy) in AHK)
-        Win32Api.mouse_event(Win32Api.MOUSEEVENTF_MOVE, dx, dy, 0, UIntPtr.Zero);
+        SendMouseEvent(Win32Api.MOUSEEVENTF_MOVE, dx, dy, 0);
     }
+
+    /// <summary>Puts the pointer on an exact screen position (pixels from the top-left of the main screen).</summary>
+    public void MouseMoveTo(int x, int y) => SetPointerPosition(x, y);
+
+    protected virtual void SetPointerPosition(int x, int y) => SetCursorPos(x, y);
+
+    /// <summary>Colour of one screen pixel as 0xRRGGBB, or -1 if Windows wouldn't say.</summary>
+    public virtual int ReadPixel(int x, int y) => ReadScreenPixel(x, y);
+
+    public static int ReadScreenPixel(int x, int y)
+    {
+        IntPtr dc = GetDC(IntPtr.Zero);
+        if (dc == IntPtr.Zero) return -1;
+        try
+        {
+            uint c = GetPixel(dc, x, y); // 0x00BBGGRR
+            if (c == 0xFFFFFFFF) return -1;
+            return (int)(((c & 0xFF) << 16) | (c & 0xFF00) | ((c >> 16) & 0xFF));
+        }
+        finally { ReleaseDC(IntPtr.Zero, dc); }
+    }
+
+    [DllImport("user32.dll")] private static extern bool SetCursorPos(int x, int y);
+    [DllImport("user32.dll")] private static extern IntPtr GetDC(IntPtr hwnd);
+    [DllImport("user32.dll")] private static extern int ReleaseDC(IntPtr hwnd, IntPtr dc);
+    [DllImport("gdi32.dll")] private static extern uint GetPixel(IntPtr dc, int x, int y);
 
     public void MouseScroll(int delta)
     {
-        Win32Api.mouse_event(Win32Api.MOUSEEVENTF_WHEEL, 0, 0, (uint)delta, UIntPtr.Zero);
+        SendMouseEvent(Win32Api.MOUSEEVENTF_WHEEL, 0, 0, (uint)delta);
     }
 
     public void SendMediaCommand(string command)
@@ -159,7 +185,7 @@ public class InputSimulator : IDisposable
         }
     }
 
-    private static void SendUnicodeInput(char c, bool isKeyUp)
+    protected virtual void SendUnicodeInput(char c, bool isKeyUp)
     {
         var input = new Win32Api.INPUT
         {
@@ -195,7 +221,11 @@ public class InputSimulator : IDisposable
         }
     }
 
-    private static void SendKeyboardInput(ushort vkCode, bool isKeyUp)
+    /// <summary>The three Send* methods are the only places that touch the real keyboard and mouse; tests override them to record instead.</summary>
+    protected virtual void SendMouseEvent(uint flags, int dx, int dy, uint data)
+        => Win32Api.mouse_event(flags, dx, dy, data, UIntPtr.Zero);
+
+    protected virtual void SendKeyboardInput(ushort vkCode, bool isKeyUp)
     {
         var input = new Win32Api.INPUT
         {

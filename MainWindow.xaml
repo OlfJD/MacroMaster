@@ -11,6 +11,7 @@
         WindowStartupLocation="CenterScreen"
         AllowDrop="True"
         DragOver="Window_DragOver"
+        PreviewKeyDown="Window_PreviewKeyDown"
         DragLeave="Window_DragLeave"
         Drop="Window_Drop">
 
@@ -170,7 +171,7 @@
                     <TextBlock x:Name="TxtProfileSubtitle" Text="0 macros" Style="{StaticResource Caption}" FontSize="13" Margin="0,4,0,0"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                    <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="ImportAhkBtn_Click" ToolTip="Add an exported profile file, or convert AutoHotkey (.ahk) scripts into macros. You can also drop files onto the window.">
+                    <Button Style="{StaticResource SecondaryButton}" Margin="0,0,8,0" Click="ImportAhkBtn_Click" AutomationProperties.Name="Import" ToolTip="Add an exported macro or profile file, or convert AutoHotkey (.ahk) scripts into macros. You can also drop files onto the window.">
                         <StackPanel Orientation="Horizontal">
                             <controls:AppIcon IconKey="download" Size="16" Margin="0,0,8,0"/>
                             <TextBlock Text="Import" VerticalAlignment="Center"/>
@@ -222,7 +223,7 @@
                                 <ColumnDefinition Width="164"/>
                                 <ColumnDefinition Width="100"/>
                                 <ColumnDefinition Width="56"/>
-                                <ColumnDefinition Width="104"/>
+                                <ColumnDefinition Width="76"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="1" Text="MACRO" Style="{StaticResource SectionLabel}" VerticalAlignment="Center"/>
                             <TextBlock Grid.Column="2" Text="TRIGGER" Style="{StaticResource SectionLabel}" VerticalAlignment="Center"/>
@@ -232,7 +233,9 @@
                     </Border>
 
                     <ListBox x:Name="MacrosListBox" Grid.Row="1" Style="{StaticResource PlainList}" ItemContainerStyle="{StaticResource MacroRow}"
-                             MouseDoubleClick="MacrosListBox_MouseDoubleClick" VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.IsVirtualizingWhenGrouping="True">
+                             MouseDoubleClick="MacrosListBox_MouseDoubleClick" VirtualizingPanel.ScrollUnit="Pixel"
+                             PreviewMouseLeftButtonDown="MacrosListBox_PreviewMouseLeftButtonDown" PreviewMouseMove="MacrosListBox_PreviewMouseMove"
+                             PreviewMouseLeftButtonUp="MacrosListBox_PreviewMouseLeftButtonUp" LostMouseCapture="MacrosListBox_LostMouseCapture" VirtualizingPanel.IsVirtualizingWhenGrouping="True">
                         <!-- Mode groups: macros sharing a hotkey, one switch key per mode. Ungrouped macros (Name "") render plain. -->
                         <ListBox.GroupStyle>
                             <GroupStyle>
@@ -251,7 +254,7 @@
                                                             <StackPanel>
                                                                 <!-- Quiet label in the name column (one step in from the switches); the bracket does the linking.
                                                                      Fixed height: the bracket's top margin below depends on it. -->
-                                                                <Border x:Name="Header" Height="40" Padding="20,12,9,0">
+                                                                <Border x:Name="Header" Height="40" Padding="20,0,9,2">
                                                                     <Grid>
                                                                         <Grid.ColumnDefinitions>
                                                                             <ColumnDefinition Width="52"/>
@@ -350,6 +353,10 @@
                                                 <MenuItem.Icon><controls:AppIcon IconKey="arrow-down" Size="16"/></MenuItem.Icon>
                                             </MenuItem>
                                             <Separator/>
+                                            <MenuItem Header="Export…" Click="MacroExport_Click" ToolTip="Save this macro as a file to share or back up">
+                                                <MenuItem.Icon><controls:AppIcon IconKey="upload" Size="16"/></MenuItem.Icon>
+                                            </MenuItem>
+                                            <Separator/>
                                             <MenuItem Header="Delete" Click="MacroDelete_Click" Foreground="{StaticResource DangerBrush}">
                                                 <MenuItem.Icon><controls:AppIcon IconKey="trash-2" Size="16"/></MenuItem.Icon>
                                             </MenuItem>
@@ -361,7 +368,7 @@
                                         <ColumnDefinition Width="164"/>
                                         <ColumnDefinition Width="100"/>
                                         <ColumnDefinition Width="56"/>
-                                        <ColumnDefinition Width="104"/>
+                                        <ColumnDefinition Width="76"/>
                                     </Grid.ColumnDefinitions>
 
                                     <CheckBox x:Name="EnableSwitch" Style="{StaticResource Switch}" IsChecked="{Binding IsEnabled}"
@@ -424,10 +431,7 @@
 
                                     <!-- Row actions (revealed on hover) -->
                                     <StackPanel x:Name="RowActions" Grid.Column="5" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Opacity="0">
-                                        <Button Style="{StaticResource IconButton}" Click="MacroRunNow_Click" ToolTip="Run now" AutomationProperties.Name="Run" Foreground="{StaticResource AccentTextBrush}">
-                                            <controls:AppIcon IconKey="play" Size="16"/>
-                                        </Button>
-                                        <Button Style="{StaticResource IconButton}" Click="MacroEdit_Click" ToolTip="Edit" AutomationProperties.Name="Edit" Margin="2,0">
+                                        <Button Style="{StaticResource IconButton}" Click="MacroEdit_Click" ToolTip="Edit" AutomationProperties.Name="Edit" Margin="0,0,2,0">
                                             <controls:AppIcon IconKey="pencil" Size="16"/>
                                         </Button>
                                         <Button Style="{StaticResource DangerIconButton}" Click="MacroDelete_Click" ToolTip="Delete" AutomationProperties.Name="Delete">
@@ -497,6 +501,22 @@
                 </Grid>
             </controls:SmoothBorder>
 
+            <!-- "Deleted … · Undo": floats over the bottom of the list for a few seconds after a delete -->
+            <controls:SmoothBorder x:Name="UndoBar" Grid.Row="3" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,40"
+                                   Background="{StaticResource RaisedBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                                   CornerRadius="{StaticResource RadiusMd}" Padding="14,6,6,6" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                    <controls:AppIcon IconKey="trash-2" Size="16" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,10,0"/>
+                    <TextBlock x:Name="UndoText" Text="Deleted" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center"
+                               MaxWidth="360" TextTrimming="CharacterEllipsis" Margin="0,0,14,0"/>
+                    <Button Style="{StaticResource SecondaryButton}" Height="28" Padding="12,0" Content="Undo" Click="Undo_Click"
+                            AutomationProperties.Name="Undo" ToolTip="Put it back (Ctrl+Z)"/>
+                    <Button Style="{StaticResource IconButton}" Margin="4,0,0,0" Click="UndoDismiss_Click" ToolTip="Dismiss" AutomationProperties.Name="Dismiss undo">
+                        <controls:AppIcon IconKey="x" Size="10"/>
+                    </Button>
+                </StackPanel>
+            </controls:SmoothBorder>
+
             <!-- Drop overlay -->
             <Border x:Name="DropOverlay" Grid.Row="1" Grid.RowSpan="3" Margin="20,0,20,16" CornerRadius="{StaticResource RadiusLg}"
                     Background="{StaticResource ScrimBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False">
@@ -505,7 +525,7 @@
                         <controls:AppIcon IconKey="file-code" Size="20" Foreground="{StaticResource AccentTextBrush}"/>
                     </Border>
                     <TextBlock Text="Drop to import" Style="{StaticResource H2}" HorizontalAlignment="Center"/>
-                    <TextBlock Text="AutoHotkey scripts become macros here; profile files are added as profiles" Style="{StaticResource Caption}" FontSize="13" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                    <TextBlock Text="Macro files and AutoHotkey scripts become macros here; profile files are added as profiles" Style="{StaticResource Caption}" FontSize="13" HorizontalAlignment="Center" Margin="0,6,0,0"/>
                 </StackPanel>
             </Border>
         </Grid>
@@ -534,12 +554,22 @@
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <Ellipse x:Name="StatusDot" Width="6" Height="6" Fill="{StaticResource SuccessBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="StatusEngineText" Text="Engine running" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
-                    <Border Width="1" Height="12" Background="{StaticResource BorderStrongBrush}" Margin="12,0"/>
-                    <controls:AppIcon IconKey="octagon-x" Size="12" Foreground="{StaticResource DangerBrush}" Margin="0,0,6,0"/>
-                    <TextBlock Text="Stop everything" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                    <Border Style="{StaticResource KeycapSm}">
-                        <TextBlock x:Name="StatusKillKey" Text="F12" Style="{StaticResource KeycapSmText}"/>
-                    </Border>
+                    <!-- The engine on/off key (Settings): off = everything stops, on again with the same key -->
+                    <StackPanel x:Name="StatusToggleHint" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Border Width="1" Height="12" Background="{StaticResource BorderStrongBrush}" Margin="12,0"/>
+                        <controls:AppIcon IconKey="power" Size="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="StatusToggleLabel" Text="Stop everything" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <Border Style="{StaticResource KeycapSm}">
+                            <TextBlock x:Name="StatusToggleKey" Text="F12" Style="{StaticResource KeycapSmText}"/>
+                        </Border>
+                    </StackPanel>
+                    <!-- Shown once an administrator app was in front (hotkeys can't reach those) -->
+                    <StackPanel x:Name="AdminWarning" Orientation="Horizontal" VerticalAlignment="Center" Visibility="Collapsed">
+                        <Border Width="1" Height="12" Background="{StaticResource BorderStrongBrush}" Margin="12,0"/>
+                        <controls:AppIcon IconKey="octagon-x" Size="12" Foreground="{StaticResource WarningBrush}" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="AdminWarningText" FontSize="12" Foreground="{StaticResource WarningBrush}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <Button Style="{StaticResource GhostButtonSm}" Content="Restart as administrator" Click="RestartAsAdmin_Click"/>
+                    </StackPanel>
                 </StackPanel>
                 <TextBlock x:Name="StatusCounts" Text="" FontSize="12" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Center"/>
             </Grid>

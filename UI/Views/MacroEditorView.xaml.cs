@@ -90,8 +90,10 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         {
             if (e.NewItems != null) foreach (MacroAction a in e.NewItems) a.PropertyChanged += Action_PropertyChanged;
             if (e.OldItems != null) foreach (MacroAction a in e.OldItems) a.PropertyChanged -= Action_PropertyChanged;
+            UpdateDepths();
             UpdateSummary();
         };
+        UpdateDepths();
 
         LoadMacroData();
         UpdateSummary();
@@ -211,6 +213,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         StopHotkeyCapture();
         StopStepKeyCapture();
         StopArmKeyCapture();
+        StopPick();
         EndStepDrag();
     }
 
@@ -227,7 +230,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         RadioOnce.IsChecked, RadioRepeat.IsChecked, RadioLoop.IsChecked, RadioHold.IsChecked, TxtRepeatCount.Text,
         ChkRequiresArming.IsChecked, _armingKey, TxtArmingName.Text, TxtArmingGroup.Text,
         string.Join(";", Actions.Select(a =>
-            $"{a.Type}|{a.Key}|{a.MouseButton}|{a.MouseDelta}|{a.MoveX}|{a.MoveY}|{a.DelayMs}|{a.RandomJitterMs}|{a.TextContent}|{a.MediaCommand}")));
+            $"{a.Type}|{a.Key}|{a.MouseButton}|{a.MouseDelta}|{a.MoveX}|{a.MoveY}|{a.DelayMs}|{a.RandomJitterMs}|{a.TextContent}|{a.MediaCommand}|{a.RepeatCount}")));
 
     /// <summary>True once anything differs from what was loaded (a blank new macro counts as unchanged).</summary>
     public bool HasUnsavedChanges => CurrentState() != _loadedState;
@@ -440,6 +443,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
     {
         if (e.PropertyName is nameof(MacroAction.DelayMs) or nameof(MacroAction.Type) or nameof(MacroAction.Key) or nameof(MacroAction.TextContent))
             UpdateSummary();
+        if (e.PropertyName == nameof(MacroAction.Type)) UpdateDepths();
 
         // Switching a mouse step to "Scroll" with no amount yet: start at one notch
         if (e.PropertyName == nameof(MacroAction.Type) && sender is MacroAction { Type: ActionType.MouseScroll, MouseDelta: 0 } a)
@@ -482,6 +486,16 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
             hint = "A “Type” step has no text yet.";
             warn = true;
         }
+        else if (Actions.Any(a => a.Type == ActionType.WaitForPixel && !MacroAction.TryParseColor(a.TextContent, out _, out _, out _)))
+        {
+            hint = "A “Wait for pixel” step has no colour yet — use its “Pick” button or type one like #FFCC00.";
+            warn = true;
+        }
+        else if (!RepeatsAreBalanced())
+        {
+            hint = "A repeat block is missing its start or its “End of repeat” row.";
+            warn = true;
+        }
         else if (RadioHold.IsChecked == true && string.IsNullOrEmpty(_primaryKey))
         {
             hint = "“While held” needs a hotkey to hold — set one under 1.";
@@ -494,7 +508,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         }
         else if (string.IsNullOrEmpty(_primaryKey))
         {
-            hint = "No hotkey yet — you can still start it with the Run button.";
+            hint = "No hotkey yet — the macro can't be started until it has one.";
         }
         else
         {
@@ -537,6 +551,113 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
 
     private void AddMedia_Click(object sender, RoutedEventArgs e)
         => AddStep(new MacroAction { Type = ActionType.Media, MediaCommand = "PlayPause" });
+
+    private void AddMoveTo_Click(object sender, RoutedEventArgs e)
+        => AddStep(new MacroAction { Type = ActionType.MouseMoveAbsolute, MoveX = 0, MoveY = 0 });
+
+    private void AddPixel_Click(object sender, RoutedEventArgs e)
+        => AddStep(new MacroAction { Type = ActionType.WaitForPixel, MoveX = 0, MoveY = 0, TextContent = string.Empty, DelayMs = 5000 });
+
+    /// <summary>A repeat block is two rows: put the steps to repeat between them (drag rows in or out).</summary>
+    private void AddRepeat_Click(object sender, RoutedEventArgs e)
+    {
+        Actions.Add(new MacroAction { Type = ActionType.RepeatStart, RepeatCount = 3 });
+        AddStep(new MacroAction { Type = ActionType.RepeatEnd });
+    }
+
+    /// <summary>Indent every step by the number of repeat blocks around it.</summary>
+    private void UpdateDepths()
+    {
+        int depth = 0;
+        foreach (var a in Actions)
+        {
+            if (a.Type == ActionType.RepeatEnd) depth = Math.Max(0, depth - 1);
+            a.Depth = depth;
+            if (a.Type == ActionType.RepeatStart) depth++;
+        }
+    }
+
+    /// <summary>Every "Repeat" row has its "End of repeat" row after it, and the other way round.</summary>
+    private bool RepeatsAreBalanced()
+    {
+        int open = 0;
+        foreach (var a in Actions)
+        {
+            if (a.Type == ActionType.RepeatStart) open++;
+            else if (a.Type == ActionType.RepeatEnd && --open < 0) return false;
+        }
+        return open == 0;
+    }
+
+    #region Pick a spot on the screen (move-to and pixel steps)
+
+    private MacroAction? _pickStep;
+    private LowLevelMouseHook? _pickMouse;
+    private LowLevelKeyboardHook? _pickKeyboard;
+
+    private void StepPick_Click(object sender, RoutedEventArgs e)
+    {
+        if (StepOf(sender) is not { } action) return;
+        if (_pickStep == action) { StopPick(); return; }
+
+        StopHotkeyCapture();
+        StopStepKeyCapture();
+        StopPick();
+        _pickStep = action;
+        action.IsCapturingKey = true;
+
+        // Hooks, not window events: the spot is usually in another window (the game). Unlike key
+        // capture this must survive switching windows, so HostWindow_Deactivated leaves it alone.
+        _pickMouse = new LowLevelMouseHook();
+        _pickMouse.OnMouseEvent += (button, isDown) =>
+        {
+            if (_pickStep == null || !isDown) return false;
+            if (button == MouseButtonType.Left && GetCursorPos(out POINT p))
+            {
+                int color = InputSimulator.ReadScreenPixel(p.X, p.Y);
+                Dispatcher.BeginInvoke(() => FinishPick(p.X, p.Y, color));
+            }
+            else
+            {
+                Dispatcher.BeginInvoke(StopPick); // any other button: never mind
+            }
+            return true; // the click was for us; don't press whatever is under it
+        };
+        _pickMouse.Install();
+
+        _pickKeyboard = new LowLevelKeyboardHook();
+        _pickKeyboard.OnKeyDown += (vk, _) =>
+        {
+            if (_pickStep == null || vk != 0x1B) return false;
+            Dispatcher.BeginInvoke(StopPick);
+            return true;
+        };
+        _pickKeyboard.Install();
+    }
+
+    private void FinishPick(int x, int y, int color)
+    {
+        if (_pickStep is { } step)
+        {
+            step.MoveX = x;
+            step.MoveY = y;
+            if (step.Type == ActionType.WaitForPixel && color >= 0) step.TextContent = $"#{color:X6}";
+        }
+        StopPick();
+        UpdateFooter();
+    }
+
+    private void StopPick()
+    {
+        if (_pickStep != null) _pickStep.IsCapturingKey = false;
+        _pickStep = null;
+        _pickMouse?.Dispose();
+        _pickMouse = null;
+        _pickKeyboard?.Dispose();
+        _pickKeyboard = null;
+    }
+
+    #endregion
 
     /// <summary>The "More" toolbar button opens its menu on a normal left click.</summary>
     private void MoreSteps_Click(object sender, RoutedEventArgs e)
@@ -660,7 +781,11 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         _stepHook = null;
     }
 
-    private void RenumberSteps() => ActionsList.Items.Refresh(); // AlternationIndex doesn't follow Move()
+    private void RenumberSteps() // AlternationIndex doesn't follow Move()
+    {
+        UpdateDepths();
+        ActionsList.Items.Refresh();
+    }
 
     private void StepMoveUp_Click(object sender, RoutedEventArgs e)
     {
@@ -687,6 +812,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
     {
         if (StepOf(sender) is not { } a) return;
         if (_stepCapture == a) StopStepKeyCapture();
+        if (_pickStep == a) StopPick();
         Actions.Remove(a);
         RenumberSteps();
     }
@@ -1110,7 +1236,8 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         DelayMs = a.DelayMs,
         RandomJitterMs = a.RandomJitterMs,
         TextContent = a.TextContent,
-        MediaCommand = a.MediaCommand
+        MediaCommand = a.MediaCommand,
+        RepeatCount = a.RepeatCount
     };
 
     private static MacroDefinition CloneMacro(MacroDefinition src)
