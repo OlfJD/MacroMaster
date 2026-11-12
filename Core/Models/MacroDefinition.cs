@@ -36,6 +36,17 @@ public class MacroDefinition
     public string ArmingDisplayName { get; set; } = string.Empty; // e.g. "Wellskate (PgUp Mode)"
     public bool IsCurrentlyArmed { get; set; } = false;
     
+    /// <summary>
+    /// Show this macro on the mode indicator: a mode group's active mode is named there while its
+    /// app is in front; a loop / while-held macro is named there while it runs. Old loop macros are
+    /// switched off once on upgrade (MainWindow.MigrateData) so nothing new pops up unasked.
+    /// </summary>
+    public bool ShowOnIndicator { get; set; } = true;
+
+    /// <summary>Whether <see cref="ShowOnIndicator"/> means anything for this macro (mode group or loop).</summary>
+    [JsonIgnore]
+    public bool CanShowOnIndicator => RequiresArming || Mode is ExecutionMode.Toggle or ExecutionMode.HoldWhileDown;
+
     // Game / Process Filtering
     public string ProcessFilter { get; set; } = "*"; // e.g. "destiny2.exe", "javaw.exe", "*" for global
     

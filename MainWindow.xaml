@@ -29,7 +29,7 @@
         <Border x:Name="SidebarPane" Grid.Column="0" Grid.Row="0" Background="{StaticResource SidebarBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="44"/>   <!-- brand / caption -->
+                    <RowDefinition Height="52"/>   <!-- brand / caption -->
                     <RowDefinition Height="Auto"/> <!-- engine -->
                     <RowDefinition Height="*"/>    <!-- profiles -->
                     <RowDefinition Height="0"/>
@@ -37,7 +37,8 @@
                 </Grid.RowDefinitions>
 
                 <!-- Brand -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="18,0,0,0">
+                <!-- Same 18 px from the top as from the left edge -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top" Margin="18,18,0,0">
                     <Image Source="{StaticResource LogoMark}" Width="24" Height="24" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                     <TextBlock Text="MacroMaster" FontFamily="{StaticResource DisplayFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -559,8 +560,10 @@
                         <Border Width="1" Height="12" Background="{StaticResource BorderStrongBrush}" Margin="12,0"/>
                         <controls:AppIcon IconKey="power" Size="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,6,0"/>
                         <TextBlock x:Name="StatusToggleLabel" Text="Stop everything" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center" Margin="0,0,6,0"/>
-                        <Border Style="{StaticResource KeycapSm}">
-                            <TextBlock x:Name="StatusToggleKey" Text="F12" Style="{StaticResource KeycapSmText}"/>
+                        <!-- Flat, small keycap: the raised one is too loud next to 12 px status text -->
+                        <Border Style="{StaticResource KeycapSm}" Padding="4,0" BorderThickness="1" MinWidth="0" Height="16" Background="Transparent">
+                            <TextBlock x:Name="StatusToggleKey" Text="F12" Style="{StaticResource KeycapSmText}" FontSize="10" FontWeight="Medium"
+                                       Foreground="{StaticResource TextSecondaryBrush}" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
                     <!-- Shown once an administrator app was in front (hotkeys can't reach those) -->

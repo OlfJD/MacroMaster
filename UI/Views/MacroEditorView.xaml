@@ -136,7 +136,7 @@
                 <TextBox Style="{StaticResource StepInput}" Text="{Binding DelayMs, UpdateSourceTrigger=PropertyChanged}"/>
                 <TextBlock Text="ms, give or take" Style="{StaticResource InlineText}"/>
                 <TextBox Style="{StaticResource StepInput}" Width="52" Text="{Binding RandomJitterMs, UpdateSourceTrigger=PropertyChanged}"
-                         ToolTip="Makes the wait a little different each time (0 = always exact)"/>
+                         ToolTip="Random variation, so the timing isn't robotic. With 50 give or take 10, each wait is somewhere between 40 and 60 ms, picked anew every time. 0 = always exactly the same."/>
                 <TextBlock Text="ms" Style="{StaticResource InlineText}"/>
             </StackPanel>
         </DataTemplate>
@@ -357,7 +357,7 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <Button x:Name="HotkeyBox" Click="HotkeyBox_Click" Cursor="Hand" FocusVisualStyle="{x:Null}">
+                            <Button x:Name="HotkeyBox" Click="HotkeyBox_Click" Cursor="Hand" FocusVisualStyle="{x:Null}" ToolTip="Click, then press the key (or key combination, or mouse side button) that should start this macro. Ctrl, Shift and Alt must match exactly: a macro on L does not fire on Ctrl+L.">
                                 <Button.Template>
                                     <ControlTemplate TargetType="{x:Type Button}">
                                         <controls:SmoothBorder x:Name="Bd" Background="{StaticResource BgBrush}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1" CornerRadius="{StaticResource RadiusMd}" MinHeight="56" Padding="14,10">
@@ -411,13 +411,13 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <RadioButton x:Name="RadioOnce" Style="{StaticResource OptionCard}" GroupName="Mode" IsChecked="True">
+                            <RadioButton x:Name="RadioOnce" Style="{StaticResource OptionCard}" GroupName="Mode" IsChecked="True" ToolTip="Each press of the hotkey plays all steps once, top to bottom.">
                                 <StackPanel>
                                     <TextBlock Text="Once" FontWeight="SemiBold"/>
                                     <TextBlock Text="Plays the steps one time." Style="{StaticResource Hint}"/>
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton x:Name="RadioRepeat" Style="{StaticResource OptionCard}" GroupName="Mode">
+                            <RadioButton x:Name="RadioRepeat" Style="{StaticResource OptionCard}" GroupName="Mode" ToolTip="Each press plays all steps this many times in a row, then stops by itself.">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="Repeat" FontWeight="SemiBold" VerticalAlignment="Center"/>
@@ -428,18 +428,35 @@
                                     <TextBlock Text="Plays the steps several times in a row." Style="{StaticResource Hint}"/>
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton x:Name="RadioLoop" Style="{StaticResource OptionCard}" GroupName="Mode">
+                            <RadioButton x:Name="RadioLoop" Style="{StaticResource OptionCard}" GroupName="Mode" ToolTip="Press the hotkey once and the steps repeat over and over until you press it again. Good for auto clickers and farming. The engine key (F12 by default) stops it too.">
                                 <StackPanel>
                                     <TextBlock Text="Loop until pressed again" FontWeight="SemiBold"/>
                                     <TextBlock Text="Press once to start, press again to stop." Style="{StaticResource Hint}"/>
                                 </StackPanel>
                             </RadioButton>
-                            <RadioButton x:Name="RadioHold" Style="{StaticResource OptionCard}" GroupName="Mode" Margin="0">
+                            <RadioButton x:Name="RadioHold" Style="{StaticResource OptionCard}" GroupName="Mode" Margin="0" ToolTip="The steps repeat only while you keep the hotkey held down and stop the moment you let go.">
                                 <StackPanel>
                                     <TextBlock Text="While held" FontWeight="SemiBold"/>
                                     <TextBlock Text="Repeats the steps for as long as you hold the hotkey." Style="{StaticResource Hint}"/>
                                 </StackPanel>
                             </RadioButton>
+
+                            <!-- Only for loops / while held / mode groups: see UpdateIndicatorOption -->
+                            <StackPanel x:Name="IndicatorOption" Visibility="Collapsed">
+                                <Border Style="{StaticResource Divider}" Margin="0,14"/>
+                                <Grid ToolTip="The mode indicator is a small label in a corner of the screen (Settings → On-screen overlay). Clicks pass through it, so it never gets in the way of the game.">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,0,12,0">
+                                        <TextBlock Text="Show on the mode indicator" Style="{StaticResource RowTitle}"/>
+                                        <TextBlock x:Name="IndicatorHint" Style="{StaticResource Hint}" Text="Names this macro on screen while it runs, so you can see it's on."/>
+                                    </StackPanel>
+                                    <CheckBox x:Name="ChkShowOnIndicator" Grid.Column="1" Style="{StaticResource Switch}" VerticalAlignment="Top" IsChecked="True"
+                                              AutomationProperties.Name="Show on the mode indicator"/>
+                                </Grid>
+                            </StackPanel>
                         </StackPanel>
                     </controls:SmoothBorder>
 
@@ -469,10 +486,11 @@
                             <TextBlock Text="Note" Style="{StaticResource FieldLabel}"/>
                             <TextBox x:Name="TxtDescription" Style="{StaticResource Input}" Tag="What it's for (optional)" Margin="0,0,0,14"/>
 
-                            <TextBlock Text="Category" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="Category" Style="{StaticResource FieldLabel}" ToolTip="A label shown under the name in the macro list (e.g. Destiny 2, Utility). Only for your overview."/>
                             <TextBox x:Name="TxtCategory" Style="{StaticResource Input}" Tag="General" Margin="0,0,0,14"/>
 
-                            <TextBlock Text="Only while this app is in front" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Text="Only while this app is in front" Style="{StaticResource FieldLabel}"
+                                       ToolTip="Limit the hotkey to one game or program: it does nothing anywhere else, and a running loop stops when you switch away. Any app = works everywhere."/>
                             <Button x:Name="AppPickerBtn" Style="{StaticResource PickerButton}" Click="AppPicker_Click"
                                     ToolTip="Pick the game or app this macro is for. Elsewhere the hotkey does nothing.">
                                 <Grid>
@@ -554,7 +572,7 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Margin="0,0,12,0">
+                                <StackPanel Margin="0,0,12,0" ToolTip="For several macros on the same hotkey: a switch key (e.g. PgUp) picks which of them runs. Only the active mode reacts to the hotkey; the others wait until their switch key is pressed.">
                                     <TextBlock Text="Part of a mode group" Style="{StaticResource RowTitle}"/>
                                     <TextBlock Text="Several macros share one hotkey and a switch key picks which one runs (e.g. PgUp = Wellskate, PgDn = Groundskate)."
                                                Style="{StaticResource Hint}"/>

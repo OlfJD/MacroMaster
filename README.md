@@ -2,54 +2,70 @@
 
 # ⚡ MacroMaster
 
-**Pro Gaming & Automation Macro Suite for Windows with OSD HUD & AHK Auto-Conversion**
+**Hotkeys, auto clickers and game macros for Windows — built in a clean visual editor, no scripting needed.**
 
-[![Download Latest Release](https://img.shields.io/badge/Download-Latest_Release_(Windows)-10B981?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/OlfJD/MacroMaster/releases/latest/download/MacroMaster-v1.0.0-win-x64.zip)
-[![GitHub Release](https://img.shields.io/github/v/release/OlfJD/MacroMaster?style=for-the-badge&color=10B981)](https://github.com/OlfJD/MacroMaster/releases/latest)
-[![Platform](https://img.shields.io/badge/Platform-Windows_10_%2F_11-3B82F6?style=for-the-badge&logo=windows)](https://github.com/OlfJD/MacroMaster)
+[![Download](https://img.shields.io/badge/Download-MacroMaster_for_Windows-7C83FF?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/OlfJD/MacroMaster/releases/latest/download/MacroMaster-win-x64.zip)
+[![GitHub Release](https://img.shields.io/github/v/release/OlfJD/MacroMaster?style=for-the-badge&color=7C83FF)](https://github.com/OlfJD/MacroMaster/releases/latest)
+[![Platform](https://img.shields.io/badge/Windows-10_%2F_11-3B82F6?style=for-the-badge&logo=windows)](https://github.com/OlfJD/MacroMaster)
 
-### 📥 [👉 Click Here to Download MacroMaster (.zip)](https://github.com/OlfJD/MacroMaster/releases/latest/download/MacroMaster-v1.0.0-win-x64.zip)
+### 📥 [Download MacroMaster (.zip)](https://github.com/OlfJD/MacroMaster/releases/latest/download/MacroMaster-win-x64.zip)
 
-*(No installation required — just extract and run!)*
+*No installer — extract and run. Updates itself afterwards.*
+
+<img src="docs/screenshots/macros.png" alt="MacroMaster main window with an everyday profile: auto clicker, hold left click, media keys and a typed email sign-off" width="900">
 
 </div>
 
 ---
 
-## ⚡ Quick Start for Users
+## 🚀 Quick start
 
-1. **[Download MacroMaster (.zip)](https://github.com/OlfJD/MacroMaster/releases/latest/download/MacroMaster-v1.0.0-win-x64.zip)**.
-2. **Extract** the ZIP folder anywhere on your computer.
-3. Run **`MacroMaster.exe`** (or `Launch MacroMaster.bat`).
-4. Toggle the **Master Switch** on, activate quick actions (like **Hold Left Click** or **CPS Clicker**), or drag and drop any `.ahk` script into the window!
+1. **[Download the .zip](https://github.com/OlfJD/MacroMaster/releases/latest/download/MacroMaster-win-x64.zip)** and extract it anywhere.
+2. Run **`MacroMaster.exe`**. If Windows says .NET is missing, install the free [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64) once.
+3. Click **New macro**, press the hotkey you want, add steps (or hit **Record** and just do it once yourself), save. Done — the hotkey works everywhere.
+
+`F12` switches every hotkey off and on again, from anywhere — even in a game.
 
 ---
 
-## ✨ Features
+## ✨ What it does
 
-- **Zero-Script Quick Action Toggles**:
-  - **Hold Left Click**: 1-click toggle on the dashboard or hotkey (`PgDn`) to lock Left Click down without holding the physical mouse button.
-  - **Auto Clicker / CPS Spammer**: Automated high-speed spam clicking (configurable CPS, Left/Right/Middle mouse buttons, hotkey `F6`).
-  - **Minecraft Mining Loop**: Locks Left Click Down while pulsing Right Click every 100ms for continuous mining and placing (`F7`).
+### Macros without code
+Pick a hotkey, choose **how often** it runs — once, a number of times, in a loop until you press it again, or for as long as you hold the key — and stack up steps: key presses, clicks, waits, mouse moves, scrolling, typed text, media keys, repeat blocks, even *wait until a pixel turns a certain colour*. Every option explains itself when you hover over it.
 
-- **Drag & Drop AutoHotkey (.ahk) Auto-Converter**:
-  - Drag and drop any AutoHotkey (`.ahk`) script directly onto the MacroMaster window.
-  - The built-in parser automatically converts hotkeys, multi-key conditionals (`#HotIf`, `GetKeyState`), timing delays, clicks, sends, and hardware-level mouse movements into visual, editable MacroMaster timeline steps.
+<img src="docs/screenshots/editor.png" alt="Macro editor: an AFK fishing loop with a right click and a 900 ms wait, give or take 150 ms" width="900">
 
-- **Floating Neon OSD / HUD Overlay**:
-  - Replaces basic OS tooltips with a translucent, animated floating glass HUD banner.
-  - Displays instant mode changes (e.g., `ARMED: Wellskate`, `ARMED: Groundskate`), quick toggle states, and safety killswitch alerts with crisp Lucide vector icons.
+- **Record** a sequence instead of building it: MacroMaster keeps your exact timing.
+- **"Give or take"** on a wait adds random variation (900 ± 150 ms waits anywhere between 750 and 1050 ms) so timing doesn't look robotic.
+- Hotkeys can be any key, a combination like `Ctrl + Alt + S`, chords like `Ä + Ö + L`, or the mouse side buttons.
 
-- **Destiny 2 Movement Tech Presets**:
-  - Pre-loaded with Destiny 2 movement tech presets (Wellskate & Groundskate).
-  - Multi-key execution with 1ms multimedia timer precision.
-  - Game/process filtering ensures macros only trigger when the target game is active.
+### Profiles per game or app
+Group macros into profiles and switch whole profiles on and off. Limit a macro to one program and it only reacts there — and a running loop stops by itself when you alt-tab away.
 
-- **Visual Action Timeline Builder & Live Recorder**:
-  - Visual step-by-step macro editor: Key Down, Key Up, Key Tap, Mouse Clicks, Delays, and Relative Mouse Movements.
-  - Built-in live recorder to capture keypresses and mouse clicks in real time with exact millisecond timings.
+### Mode groups
+Put several macros on the **same hotkey** and pick which one is active with a switch key — e.g. Mouse 5 builds a bridge after `F7` and digs a tunnel after `F8`.
 
-- **Safety & Performance**:
-  - **Engine on/off key (`F12`)**: Pressing `F12` switches the whole engine off: all running macros halt, held mouse buttons and keys are released, and every hotkey is ignored until you press it again.
-  - **Multimedia High-Frequency Timer**: Activates Windows `timeBeginPeriod(1)` to eliminate standard 15.6ms OS timer jitter.
-  - **System Tray Background App**: Runs silently in the Windows taskbar notification area with ~8-12 MB RAM footprint.
+<img src="docs/screenshots/mode-groups.png" alt="Minecraft profile with a mode group: Mouse 5 runs Bridge or Tunnel depending on F7 / F8" width="900">
+
+### On-screen overlay
+A small notification tells you when a macro starts, stops or a mode switches, and an optional **mode indicator** stays on screen to show the active mode and any loop that's running. Clicks pass straight through it. Put either one in any corner, top or bottom centre — or drag it to exactly the spot you want.
+
+<img src="docs/screenshots/overlay.png" alt="The mode indicator showing 'Bridge' and a notification banner" width="700">
+
+### Made to stay out of the way
+- Lives in the tray and **starts with Windows** — as administrator if you like, so hotkeys also work in games that run as administrator (Windows asks once).
+- **Updates itself** quietly from GitHub releases, at a moment when no macro is running.
+- **Sharp on every screen**: the interface scales with your monitor (1080p, 1440p, 4K) or to the size you pick.
+- Precise timing (1 ms timer, hybrid sleep/spin waits), `F12` releases everything that's held down.
+- **AutoHotkey import**: drop an `.ahk` script onto the window and its hotkeys become editable macros. Profiles and single macros can be exported and shared as files.
+
+<img src="docs/screenshots/settings.png" alt="Settings: engine key, quick open key, notification and mode indicator positions" width="900">
+
+---
+
+## 🛠️ For developers
+
+- C# / WPF on **.NET 10**, Windows only. Run from source with `Run Dev.bat` (needs the .NET 10 SDK).
+- Tests: `dotnet test Tests` — they drive the real engine with simulated keys and never touch your keyboard or mouse.
+- `DEVLOG.md` has the architecture, a changelog of every change and the to-do list.
+- **Releasing**: bump `<Version>` in `MacroMaster.csproj`, publish (`dotnet publish -c Release`), zip the output as `MacroMaster-win-x64.zip` and attach it to a GitHub release tagged `v<version>`. Installed copies pick it up automatically.

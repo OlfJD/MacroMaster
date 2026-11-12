@@ -6,6 +6,7 @@ using MacroMaster.Core.Native;
 using MacroMaster.UI;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
+using ComboBox = System.Windows.Controls.ComboBox;
 
 namespace MacroMaster.UI.Views;
 
@@ -23,6 +24,19 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     private Button? _activeCaptureButton;
     private LowLevelKeyboardHook? _captureKeyboardHook;
     private LowLevelMouseHook? _captureMouseHook;
+
+    // Custom spots being edited; written to the settings on Save
+    private ScreenSpot _hudSpot = new();
+    private ScreenSpot _indicatorSpot = new();
+    private bool _loading;
+
+    /// <summary>Order of the position lists (top row, bottom row, custom).</summary>
+    private static readonly HudPosition[] PositionOrder =
+    {
+        HudPosition.TopLeft, HudPosition.TopCenter, HudPosition.TopRight,
+        HudPosition.BottomLeft, HudPosition.BottomCenter, HudPosition.BottomRight,
+        HudPosition.Custom
+    };
 
     public SettingsView(AppSettings settings)
     {
@@ -45,11 +59,15 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         }
 
         // HUD / Overlay
+        _loading = true;
+        _hudSpot = Copy(_settings.OverlayCustomSpot);
+        _indicatorSpot = Copy(_settings.ModeIndicatorCustomSpot);
+        FillPositions(CmbHudPosition, HudPosition.TopRight, _settings.OverlayPosition);
+        FillPositions(CmbIndicatorPosition, HudPosition.TopLeft, _settings.ModeIndicatorPosition);
         ChkShowOverlay.IsChecked = _settings.ShowHudOverlay;
-        CmbHudPosition.SelectedIndex = (int)_settings.OverlayPosition;
         TxtHudDuration.Text = _settings.HudDurationMs.ToString();
         ChkModeIndicator.IsChecked = _settings.ShowModeIndicator;
-        CmbIndicatorPosition.SelectedIndex = (int)_settings.ModeIndicatorPosition;
+        _loading = false;
 
         // Display
         double auto = UiScale.AutoFor(new System.Windows.Interop.WindowInteropHelper(Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow).Handle);
@@ -66,6 +84,10 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         // System
         ChkStartWithWindows.IsChecked = _settings.StartWithWindows;
+        ChkStartAsAdmin.IsChecked = _settings.StartAsAdmin;
+        UpdateStartAsAdminRow();
+        ChkAutoUpdate.IsChecked = _settings.AutoUpdate;
+        TxtUpdateHint.Text = $"You have version {AppUpdater.CurrentVersion.ToString(3)}. New versions from GitHub are installed quietly in the background.";
         ChkMinimizeToTray.IsChecked = _settings.MinimizeToTray;
         ChkCloseToTray.IsChecked = _settings.CloseToTray;
     }
@@ -81,10 +103,98 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     /// "Show preview": the main window shows the mode indicator for a few seconds at the position
     /// picked here (saved or not), so it can be judged without starting the game.
     /// </summary>
-    public event Action<HudPosition>? ModeIndicatorPreviewRequested;
+    public event Action<HudPosition, ScreenSpot>? ModeIndicatorPreviewRequested;
+
+    /// <summary>"Show preview" next to notifications: an example notification at the position picked here.</summary>
+    public event Action<HudPosition, ScreenSpot>? NotificationPreviewRequested;
 
     private void BtnPreviewIndicator_Click(object sender, RoutedEventArgs e)
-        => ModeIndicatorPreviewRequested?.Invoke((HudPosition)Math.Max(0, CmbIndicatorPosition.SelectedIndex));
+        => ModeIndicatorPreviewRequested?.Invoke(SelectedPosition(CmbIndicatorPosition), _indicatorSpot);
+
+    private void BtnPreviewHud_Click(object sender, RoutedEventArgs e)
+        => NotificationPreviewRequested?.Invoke(SelectedPosition(CmbHudPosition), _hudSpot);
+
+    #region Positions
+
+    private static ScreenSpot Copy(ScreenSpot? s) => new() { X = s?.X ?? 0.5, Y = s?.Y ?? 0.1 };
+
+    private static string PositionName(HudPosition p) => p switch
+    {
+        HudPosition.TopLeft => "Top left",
+        HudPosition.TopCenter => "Top center",
+        HudPosition.TopRight => "Top right",
+        HudPosition.BottomLeft => "Bottom left",
+        HudPosition.BottomCenter => "Bottom center",
+        HudPosition.BottomRight => "Bottom right",
+        _ => "Custom (drag it anywhere)"
+    };
+
+    private static void FillPositions(ComboBox box, HudPosition defaultPosition, HudPosition current)
+    {
+        box.Items.Clear();
+        foreach (var p in PositionOrder)
+        {
+            box.Items.Add(new ComboBoxItem
+            {
+                Content = PositionName(p) + (p == defaultPosition ? " (default)" : ""),
+                Tag = p
+            });
+        }
+        box.SelectedIndex = Math.Max(0, Array.IndexOf(PositionOrder, current));
+    }
+
+    private static HudPosition SelectedPosition(ComboBox box)
+        => box.SelectedItem is ComboBoxItem { Tag: HudPosition p } ? p : HudPosition.TopRight;
+
+    private void CmbHudPosition_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => PositionChanged(CmbHudPosition, BtnPlaceHud, BtnPlaceHud_Click);
+
+    private void CmbIndicatorPosition_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        => PositionChanged(CmbIndicatorPosition, BtnPlaceIndicator, BtnPlaceIndicator_Click);
+
+    /// <summary>Custom shows the "Place it…" button; picking Custom in the list opens the picker straight away.</summary>
+    private void PositionChanged(ComboBox box, Button placeButton, RoutedEventHandler place)
+    {
+        if (placeButton == null) return; // during InitializeComponent
+        bool custom = SelectedPosition(box) == HudPosition.Custom;
+        placeButton.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        if (!custom || _loading || !IsLoaded) return;
+
+        // Only once the drop-down has closed, or it would take the focus from the picker
+        void Open() => Dispatcher.BeginInvoke(() => place(placeButton, new RoutedEventArgs()), System.Windows.Threading.DispatcherPriority.Background);
+        if (!box.IsDropDownOpen) { Open(); return; }
+        void Closed(object? s, EventArgs e) { box.DropDownClosed -= Closed; Open(); }
+        box.DropDownClosed += Closed;
+    }
+
+    private void BtnPlaceHud_Click(object sender, RoutedEventArgs e)
+    {
+        var spot = Windows.PositionPickerWindow.Pick("Notifications show up here", _hudSpot, Window.GetWindow(this));
+        if (spot != null) _hudSpot = spot;
+    }
+
+    private void BtnPlaceIndicator_Click(object sender, RoutedEventArgs e)
+    {
+        var spot = Windows.PositionPickerWindow.Pick("The mode indicator sits here", _indicatorSpot, Window.GetWindow(this));
+        if (spot != null) _indicatorSpot = spot;
+    }
+
+    #endregion
+
+    #region Start with Windows
+
+    private void ChkStartWithWindows_Changed(object sender, RoutedEventArgs e) => UpdateStartAsAdminRow();
+
+    /// <summary>"As administrator" belongs to "Start with Windows" and only matters while that is on.</summary>
+    private void UpdateStartAsAdminRow()
+    {
+        if (StartAsAdminRow == null) return;
+        bool on = ChkStartWithWindows.IsChecked == true;
+        StartAsAdminRow.IsEnabled = on;
+        StartAsAdminRow.Opacity = on ? 1 : 0.45;
+    }
+
+    #endregion
 
     /// <summary>The main window does the restart (it owns the engine and the tray icon).</summary>
     public event Action? RestartAsAdminRequested;
@@ -223,20 +333,24 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         // HUD / Overlay
         _settings.ShowHudOverlay = ChkShowOverlay.IsChecked == true;
-        _settings.OverlayPosition = (HudPosition)Math.Max(0, CmbHudPosition.SelectedIndex);
+        _settings.OverlayPosition = SelectedPosition(CmbHudPosition);
+        _settings.OverlayCustomSpot = _hudSpot;
         if (int.TryParse(TxtHudDuration.Text, out int dur))
         {
             _settings.HudDurationMs = Math.Max(500, dur);
         }
 
         _settings.ShowModeIndicator = ChkModeIndicator.IsChecked == true;
-        _settings.ModeIndicatorPosition = (HudPosition)Math.Max(0, CmbIndicatorPosition.SelectedIndex);
+        _settings.ModeIndicatorPosition = SelectedPosition(CmbIndicatorPosition);
+        _settings.ModeIndicatorCustomSpot = _indicatorSpot;
 
         // Display
         if (CmbUiScale.SelectedItem is ComboBoxItem { Tag: int percent }) _settings.UiScalePercent = percent;
 
         // System
         _settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;
+        _settings.StartAsAdmin = ChkStartAsAdmin.IsChecked == true;
+        _settings.AutoUpdate = ChkAutoUpdate.IsChecked == true;
         _settings.MinimizeToTray = ChkMinimizeToTray.IsChecked == true;
         _settings.CloseToTray = ChkCloseToTray.IsChecked == true;
 

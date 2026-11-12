@@ -52,7 +52,7 @@
                 <TextBlock Text="GLOBAL KEYS" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
                 <controls:SmoothBorder Style="{StaticResource Card}" Margin="0,0,0,24">
                     <StackPanel>
-                        <Grid>
+                        <Grid ToolTip="One key that works everywhere, even in a game and even while the engine is off. Press it to switch every hotkey off (running macros stop and anything they hold is let go), press it again to switch them back on.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -74,7 +74,7 @@
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="Handy in a game: press it to pull MacroMaster in front, edit a macro, press it again and you're back in the game.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
@@ -100,38 +100,38 @@
                 <TextBlock Text="ON-SCREEN OVERLAY" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
                 <controls:SmoothBorder Style="{StaticResource Card}" Margin="0,0,0,24">
                     <StackPanel>
-                        <Grid>
+                        <Grid ToolTip="Pops up for a moment when a macro starts or stops, a mode is switched or the engine goes on or off. It never takes the focus away from your game and disappears as soon as the mouse touches it.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,16,0">
                                 <TextBlock Text="Show notifications" Style="{StaticResource RowTitle}"/>
                                 <TextBlock Text="A small banner when a macro starts, stops or a mode is armed." Style="{StaticResource Hint}"/>
                             </StackPanel>
-                            <CheckBox x:Name="ChkShowOverlay" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True"/>
+                            <Button x:Name="BtnPreviewHud" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Show preview" VerticalAlignment="Center" Margin="0,0,12,0"
+                                    Click="BtnPreviewHud_Click" ToolTip="Shows an example notification in the position chosen below"/>
+                            <CheckBox x:Name="ChkShowOverlay" Grid.Column="2" Style="{StaticResource Switch}" IsChecked="True" AutomationProperties.Name="Show notifications"/>
                         </Grid>
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="Where on the screen notifications appear. They always show on the monitor of the app in front, so on the monitor you're playing on. Pick Custom to drag them to any spot.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Position" Style="{StaticResource RowTitle}" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="CmbHudPosition" Grid.Column="1" Width="208">
-                                <ComboBoxItem Content="Top center"/>
-                                <ComboBoxItem Content="Top right (default)"/>
-                                <ComboBoxItem Content="Bottom right"/>
-                                <ComboBoxItem Content="Bottom center"/>
-                                <ComboBoxItem Content="Top left"/>
-                            </ComboBox>
+                            <Button x:Name="BtnPlaceHud" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Place it…" VerticalAlignment="Center" Margin="0,0,8,0"
+                                    Click="BtnPlaceHud_Click" Visibility="Collapsed" ToolTip="Drag a stand-in to the spot you want"/>
+                            <ComboBox x:Name="CmbHudPosition" Grid.Column="2" Width="208" SelectionChanged="CmbHudPosition_SelectionChanged"/>
                         </Grid>
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="How long a notification stays on screen, in milliseconds (1000 ms = 1 second). The shortest is 500.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -145,7 +145,7 @@
                         <Border Style="{StaticResource RowDivider}"/>
 
                         <!-- Mode indicator: stays on screen (the banner above comes and goes) -->
-                        <Grid>
+                        <Grid ToolTip="Shows the active mode of your mode groups (e.g. Wellskate) while their game is in front, and loops that are running, if the macro has &quot;Show on the mode indicator&quot; switched on in the editor. It stays on screen and clicks pass straight through it.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -153,7 +153,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,16,0">
                                 <TextBlock Text="Mode indicator" Style="{StaticResource RowTitle}"/>
-                                <TextBlock Text="A small label that stays on screen while a mode group's app is in front and shows the active mode. Clicks pass through it."
+                                <TextBlock Text="A small label that stays on screen and shows the active mode and running loops. Clicks pass through it."
                                            Style="{StaticResource Hint}"/>
                             </StackPanel>
                             <Button x:Name="BtnPreviewIndicator" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Show preview" VerticalAlignment="Center" Margin="0,0,12,0"
@@ -163,19 +163,16 @@
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="Where on the screen the mode indicator sits. Pick Custom to drag it to any spot.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Indicator position" Style="{StaticResource RowTitle}" VerticalAlignment="Center"/>
-                            <ComboBox x:Name="CmbIndicatorPosition" Grid.Column="1" Width="208">
-                                <ComboBoxItem Content="Top center"/>
-                                <ComboBoxItem Content="Top right"/>
-                                <ComboBoxItem Content="Bottom right"/>
-                                <ComboBoxItem Content="Bottom center"/>
-                                <ComboBoxItem Content="Top left (default)"/>
-                            </ComboBox>
+                            <Button x:Name="BtnPlaceIndicator" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Place it…" VerticalAlignment="Center" Margin="0,0,8,0"
+                                    Click="BtnPlaceIndicator_Click" Visibility="Collapsed" ToolTip="Drag a stand-in to the spot you want"/>
+                            <ComboBox x:Name="CmbIndicatorPosition" Grid.Column="2" Width="208" SelectionChanged="CmbIndicatorPosition_SelectionChanged"/>
                         </Grid>
                     </StackPanel>
                 </controls:SmoothBorder>
@@ -183,7 +180,7 @@
                 <!-- DISPLAY -->
                 <TextBlock Text="DISPLAY" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
                 <controls:SmoothBorder Style="{StaticResource Card}" Margin="0,0,0,24">
-                    <Grid>
+                    <Grid ToolTip="How big buttons and text are. Auto looks at the screen MacroMaster is on and grows everything on bigger screens (133 % on 1440p, 200 % on 4K). Pick a number to use that size everywhere.">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -201,7 +198,7 @@
                 <TextBlock Text="SYSTEM" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
                 <controls:SmoothBorder Style="{StaticResource Card}">
                     <StackPanel>
-                        <Grid>
+                        <Grid ToolTip="MacroMaster starts by itself when you sign in to Windows and waits in the tray (the small icons next to the clock), so your hotkeys are ready without opening it.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -210,12 +207,25 @@
                                 <TextBlock Text="Start with Windows" Style="{StaticResource RowTitle}"/>
                                 <TextBlock Text="Launches quietly in the tray when you sign in." Style="{StaticResource Hint}"/>
                             </StackPanel>
-                            <CheckBox x:Name="ChkStartWithWindows" Grid.Column="1" Style="{StaticResource Switch}"/>
+                            <CheckBox x:Name="ChkStartWithWindows" Grid.Column="1" Style="{StaticResource Switch}" Checked="ChkStartWithWindows_Changed" Unchecked="ChkStartWithWindows_Changed"/>
+                        </Grid>
+
+                        <Grid x:Name="StartAsAdminRow" Margin="0,12,0,0"
+                              ToolTip="Some games and tools run as administrator, and Windows hides your key presses in them from normal programs, so hotkeys would do nothing there. Started as administrator, MacroMaster works in those too. Windows asks for permission once when you save; after that it starts without asking. Downside: you can't drag files from Explorer onto an administrator window.">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="20,0,16,0">
+                                <TextBlock Text="As administrator" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="TxtStartAsAdminHint" Text="So hotkeys also work in games that run as administrator. Windows asks once when you save." Style="{StaticResource Hint}"/>
+                            </StackPanel>
+                            <CheckBox x:Name="ChkStartAsAdmin" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Start as administrator"/>
                         </Grid>
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="On: the minimize button hides MacroMaster in the tray (next to the clock) instead of the taskbar. Click the tray icon to bring it back.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -229,7 +239,7 @@
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="On: closing the window (X) only hides it and your hotkeys keep working. To really quit, right-click the tray icon and choose Exit. Off: closing the window quits MacroMaster.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -243,7 +253,7 @@
 
                         <Border Style="{StaticResource RowDivider}"/>
 
-                        <Grid>
+                        <Grid ToolTip="Restarts MacroMaster right now with administrator rights (Windows asks for permission), until you close it. To always start that way, use Start with Windows → As administrator above.">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -255,6 +265,20 @@
                             </StackPanel>
                             <Button x:Name="BtnRestartAsAdmin" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Restart as administrator"
                                     VerticalAlignment="Center" Click="BtnRestartAsAdmin_Click"/>
+                        </Grid>
+
+                        <Border Style="{StaticResource RowDivider}"/>
+
+                        <Grid ToolTip="MacroMaster checks GitHub for a new version when it starts and every few hours. A new version is downloaded in the background and installed the next time no macro is running and you're not editing; MacroMaster restarts by itself in a second and keeps your macros and settings.">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="0,0,16,0">
+                                <TextBlock Text="Update automatically" Style="{StaticResource RowTitle}"/>
+                                <TextBlock x:Name="TxtUpdateHint" Text="Installs new versions from GitHub quietly in the background." Style="{StaticResource Hint}"/>
+                            </StackPanel>
+                            <CheckBox x:Name="ChkAutoUpdate" Grid.Column="1" Style="{StaticResource Switch}" AutomationProperties.Name="Update automatically"/>
                         </Grid>
                     </StackPanel>
                 </controls:SmoothBorder>

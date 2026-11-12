@@ -156,13 +156,19 @@ public class MacroEngine : IDisposable
         string? text = null;
         if (Settings.MasterEngineEnabled && Settings.ShowModeIndicator)
         {
-            var modes = LiveProfiles()
-                .SelectMany(s => s.Macros)
-                .Where(m => m.IsEnabled && m.RequiresArming && m.IsCurrentlyArmed && ProcessWatcher.IsProcessActive(m.ProcessFilter))
+            var macros = LiveProfiles().SelectMany(s => s.Macros).Where(m => m.IsEnabled && m.ShowOnIndicator).ToList();
+            // Active modes whose app is in front …
+            var parts = macros
+                .Where(m => m.RequiresArming && m.IsCurrentlyArmed && ProcessWatcher.IsProcessActive(m.ProcessFilter))
                 .Select(m => m.ModeShortName)
                 .Distinct()
                 .ToList();
-            if (modes.Count > 0) text = string.Join("  ·  ", modes);
+            // … and loops that are running right now (they stop by themselves when their app isn't in front)
+            parts.AddRange(macros
+                .Where(m => !m.RequiresArming && m.IsRunning && m.Mode is ExecutionMode.Toggle or ExecutionMode.HoldWhileDown)
+                .Select(m => $"{m.Name} running")
+                .Distinct());
+            if (parts.Count > 0) text = string.Join("  ·  ", parts);
         }
 
         if (text == ModeIndicatorText) return;
@@ -483,6 +489,7 @@ public class MacroEngine : IDisposable
     {
         macro.IsRunning = true;
         TriggerHud(macro.Name, hudSubtitle, "repeat", Success);
+        RefreshModeIndicator();
         OnStateRefreshed?.Invoke();
 
         var cts = new CancellationTokenSource();
@@ -528,6 +535,7 @@ public class MacroEngine : IDisposable
                 {
                     macro.IsRunning = false;
                 }
+                RefreshModeIndicator();
                 OnStateRefreshed?.Invoke();
             }
         }, cts.Token);
@@ -540,6 +548,7 @@ public class MacroEngine : IDisposable
         macro.IsRunning = false;
         _simulator.ReleaseAllInputs();
         if (announce) TriggerHud(macro.Name, "Stopped", "square", Muted);
+        RefreshModeIndicator();
         OnStateRefreshed?.Invoke();
     }
 

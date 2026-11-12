@@ -101,6 +101,8 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         TxtName.TextChanged += (_, _) => UpdateFooter();
         RadioHold.Checked += (_, _) => UpdateFooter();
         RadioHold.Unchecked += (_, _) => UpdateFooter();
+        foreach (var r in new[] { RadioOnce, RadioRepeat, RadioLoop, RadioHold }) r.Checked += (_, _) => UpdateIndicatorOption();
+        UpdateIndicatorOption();
         _loadedState = CurrentState();
 
         Loaded += (_, _) =>
@@ -148,6 +150,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         TxtRepeatCount.Text = Math.Max(2, Macro.RepeatCount).ToString();
 
         ChkRequiresArming.IsChecked = Macro.RequiresArming;
+        ChkShowOnIndicator.IsChecked = Macro.ShowOnIndicator; // true for a new macro
         _armingKey = Macro.ArmingKey;
         TxtArmingName.Text = Macro.RequiresArming ? Macro.ModeShortName : string.Empty;
         TxtArmingGroup.Text = Macro.ArmingGroupName;
@@ -183,6 +186,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         if (int.TryParse(TxtRepeatCount.Text, out int rep)) Macro.RepeatCount = Math.Clamp(rep, 1, 10000);
 
         Macro.RequiresArming = ChkRequiresArming.IsChecked == true;
+        Macro.ShowOnIndicator = ChkShowOnIndicator.IsChecked == true;
         Macro.ArmingKey = _armingKey;
         Macro.ArmingDisplayName = string.IsNullOrWhiteSpace(TxtArmingName.Text) ? Macro.Name : TxtArmingName.Text.Trim();
         Macro.ArmingGroupName = TxtArmingGroup.Text.Trim();
@@ -228,7 +232,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         TxtName.Text, TxtDescription.Text, TxtCategory.Text, _processFilter,
         _primaryKey, string.Join(",", _chordKeys), _ctrl, _shift, _alt, _win,
         RadioOnce.IsChecked, RadioRepeat.IsChecked, RadioLoop.IsChecked, RadioHold.IsChecked, TxtRepeatCount.Text,
-        ChkRequiresArming.IsChecked, _armingKey, TxtArmingName.Text, TxtArmingGroup.Text,
+        ChkRequiresArming.IsChecked, _armingKey, TxtArmingName.Text, TxtArmingGroup.Text, ChkShowOnIndicator.IsChecked,
         string.Join(";", Actions.Select(a =>
             $"{a.Type}|{a.Key}|{a.MouseButton}|{a.MouseDelta}|{a.MoveX}|{a.MoveY}|{a.DelayMs}|{a.RandomJitterMs}|{a.TextContent}|{a.MediaCommand}|{a.RepeatCount}")));
 
@@ -823,6 +827,21 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
 
     private void TxtRepeatCount_GotFocus(object sender, KeyboardFocusChangedEventArgs e) => RadioRepeat.IsChecked = true;
 
+    /// <summary>
+    /// "Show on the mode indicator" only means something for a mode group (shows the active mode) or a
+    /// loop / while-held macro (shows that it runs); a one-off run is over before you could read it.
+    /// </summary>
+    private void UpdateIndicatorOption()
+    {
+        if (IndicatorOption == null || ChkRequiresArming == null) return; // during InitializeComponent
+        bool group = ChkRequiresArming.IsChecked == true;
+        bool loop = RadioLoop.IsChecked == true || RadioHold.IsChecked == true;
+        IndicatorOption.Visibility = group || loop ? Visibility.Visible : Visibility.Collapsed;
+        IndicatorHint.Text = group
+            ? "Names this mode on screen while it's the active one and its app is in front."
+            : "Names this macro on screen while it runs, so you can see it's on.";
+    }
+
     private void MoreToggle_Changed(object sender, RoutedEventArgs e)
         => MorePanel.Visibility = MoreToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
 
@@ -830,6 +849,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
     {
         bool on = ChkRequiresArming.IsChecked == true;
         ArmingConfigPanel.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        UpdateIndicatorOption();
         if (!IsLoaded) return;
         if (on && string.IsNullOrWhiteSpace(TxtArmingName.Text) && !string.IsNullOrWhiteSpace(TxtName.Text))
             TxtArmingName.Text = TxtName.Text.Trim();
@@ -1257,6 +1277,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
             ArmingGroupName = src.ArmingGroupName,
             ArmingDisplayName = src.ArmingDisplayName,
             IsCurrentlyArmed = src.IsCurrentlyArmed,
+            ShowOnIndicator = src.ShowOnIndicator,
             ProcessFilter = src.ProcessFilter,
             ImportedFromAhk = src.ImportedFromAhk,
             OriginalAhkScript = src.OriginalAhkScript,

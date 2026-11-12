@@ -167,7 +167,14 @@ public partial class MainWindow : Window
         RefreshMacrosList();
         SyncUiStates();
 
-        AutoStartManager.SyncStartupRegistration(_engine.Settings.StartWithWindows);
+        // A copy on its own data folder (MACROMASTER_DATA_DIR, for trying things out) must not touch the
+        // Windows start entry or update the app: both are shared with the real installation.
+        bool sandbox = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MACROMASTER_DATA_DIR"));
+        if (!sandbox) SyncAutostart(mayAskForPermission: false);
+        if (!sandbox) AppUpdater.Start(_engine,
+            userBusy: () => IsEditorOpen || IsActive,
+            windowShown: () => IsVisible && WindowState != WindowState.Minimized,
+            shutdown: QuitForUpdate);
 
         bool isAutostart = Environment.GetCommandLineArgs().Any(arg =>
             arg.Equals("--autostart", StringComparison.OrdinalIgnoreCase) ||
@@ -204,6 +211,14 @@ public partial class MainWindow : Window
         {
             // Popups moved from top center to the top-right corner (old default → new default)
             settings.OverlayPosition = HudPosition.TopRight;
+        }
+
+        if (settings.DataVersion < 5)
+        {
+            // "Show on the mode indicator" is new and on by default. Mode groups always showed there;
+            // loops never did, so keep those off instead of surprising anyone with a new label.
+            foreach (var m in profiles.SelectMany(p => p.Macros).Where(m => !m.RequiresArming))
+                m.ShowOnIndicator = false;
         }
 
         // The separate kill switch key became the engine on/off key
@@ -243,7 +258,7 @@ public partial class MainWindow : Window
 
     private void Notify(string title, string subtitle, string icon, string color = "#7C83FF", int durationMs = 2200)
     {
-        _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs);
+        _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs, _engine.Settings.OverlayCustomSpot);
     }
 
     #region Mode indicator
@@ -261,20 +276,20 @@ public partial class MainWindow : Window
             return;
         }
         _modeIndicator ??= new ModeIndicatorWindow();
-        _modeIndicator.ShowMode(text, _engine.Settings.ModeIndicatorPosition);
+        _modeIndicator.ShowMode(text, _engine.Settings.ModeIndicatorPosition, _engine.Settings.ModeIndicatorCustomSpot);
     }
 
     /// <summary>
     /// Settings → "Show preview": shows the indicator for a few seconds no matter which app is in
     /// front, with the mode that is active right now (or an example name if there are no mode groups).
     /// </summary>
-    private void PreviewModeIndicator(HudPosition position)
+    private void PreviewModeIndicator(HudPosition position, ScreenSpot spot)
     {
         string text = _engine.Profiles.SelectMany(p => p.Macros)
                              .FirstOrDefault(m => m.RequiresArming && m.IsCurrentlyArmed)?.ModeShortName ?? "Wellskate";
 
         _modeIndicator ??= new ModeIndicatorWindow();
-        _modeIndicator.ShowMode(text, position);
+        _modeIndicator.ShowMode(text, position, spot);
 
         _previewTimer ??= new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
         _previewTimer.Tick -= PreviewTimer_Tick;
@@ -293,7 +308,7 @@ public partial class MainWindow : Window
 
     private void Engine_OnHudNotification(string title, string subtitle, string iconKey, string accentColor)
     {
-        _hudOverlay?.ShowNotification(title, subtitle, iconKey, accentColor, _engine.Settings.OverlayPosition, _engine.Settings.HudDurationMs);
+        _hudOverlay?.ShowNotification(title, subtitle, iconKey, accentColor, _engine.Settings.OverlayPosition, _engine.Settings.HudDurationMs, _engine.Settings.OverlayCustomSpot);
     }
 
     private void Engine_OnStateRefreshed()
@@ -1127,12 +1142,18 @@ public partial class MainWindow : Window
         var page = new SettingsView(_engine.Settings);
         page.RestartAsAdminRequested += RestartAsAdministrator;
         page.ModeIndicatorPreviewRequested += PreviewModeIndicator;
+        page.NotificationPreviewRequested += (position, spot) =>
+            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", "#7C83FF",
+                                          position, Math.Max(2500, _engine.Settings.HudDurationMs), spot);
+        bool wasAutostart = _engine.Settings.StartWithWindows, wasAdmin = _engine.Settings.StartAsAdmin;
         page.Finished += saved =>
         {
             ClosePage();
             if (!saved) return;
             SaveState();
             SyncUiStates();
+            if (_engine.Settings.StartWithWindows != wasAutostart || _engine.Settings.StartAsAdmin != wasAdmin)
+                SyncAutostart(mayAskForPermission: true);
             UiScale.Preference = _engine.Settings.UiScalePercent;
             UpdateUiScale(force: true);
             _engine.RefreshModeIndicator();
@@ -1148,6 +1169,17 @@ public partial class MainWindow : Window
     /// Starts a second copy with administrator rights (Windows asks for permission) and closes this
     /// one, so hotkeys also work in games and tools that run as administrator themselves.
     /// </summary>
+    /// <summary>The updater installs a new version: save, let go of everything and quit (it restarts us).</summary>
+    private void QuitForUpdate()
+    {
+        SaveState();
+        _trayManager?.Dispose();
+        _hudOverlay?.Close();
+        _modeIndicator?.Close();
+        _engine.Dispose();
+        System.Windows.Application.Current.Shutdown();
+    }
+
     private void RestartAsAdministrator()
     {
         if (Environment.ProcessPath is not { } exe) return;
@@ -1201,7 +1233,29 @@ public partial class MainWindow : Window
         if (!_isInitialized || string.IsNullOrEmpty(_profilesFilePath)) return;
         MacroJsonSerializer.SaveProfiles(_engine.Profiles.ToList(), _profilesFilePath);
         MacroJsonSerializer.SaveSettings(_engine.Settings, _settingsFilePath);
-        AutoStartManager.SetStartup(_engine.Settings.StartWithWindows);
+    }
+
+    /// <summary>
+    /// Makes the sign-in start match the settings, in the background (schtasks.exe is slow-ish).
+    /// With <paramref name="mayAskForPermission"/> Windows may ask once to set up the administrator start.
+    /// </summary>
+    private void SyncAutostart(bool mayAskForPermission)
+    {
+        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MACROMASTER_DATA_DIR"))) return; // see MainWindow_Loaded
+        var s = _engine.Settings;
+        bool enable = s.StartWithWindows, asAdmin = s.StartAsAdmin;
+        Task.Run(() =>
+        {
+            var outcome = AutoStartManager.Sync(enable, asAdmin, mayAskForPermission);
+            if (!mayAskForPermission) return;
+            Dispatcher.BeginInvoke(() =>
+            {
+                if (outcome == AutoStartManager.Outcome.StartsWithoutAdmin)
+                    Notify("Starts without administrator rights", "Windows didn't give permission, so MacroMaster starts normally with Windows.", "shield-alert", "#F5B83D", 6000);
+                else if (outcome == AutoStartManager.Outcome.Failed)
+                    Notify("Couldn't change the Windows start", "Try again in Settings → Start with Windows.", "octagon-x", "#F2555A", 6000);
+            });
+        });
     }
 
     #endregion

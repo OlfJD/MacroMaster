@@ -35,42 +35,17 @@ public partial class ModeIndicatorWindow : Window
     }
 
     /// <summary>Shows the label with this text in a screen corner (of the monitor the app in front is on).</summary>
-    public void ShowMode(string text, HudPosition position)
+    public void ShowMode(string text, HudPosition position, ScreenSpot? spot = null)
     {
         ModeText.Text = text;
         UiScale.ApplyTo((FrameworkElement)Content, UiScale.Resolve(GetForegroundWindow()));
         if (!IsVisible) Show();
         UpdateLayout();
-        Reposition(position);
+        Reposition(position, spot);
     }
 
-    private void Reposition(HudPosition position)
-    {
-        if (_hwnd == IntPtr.Zero) return;
-
-        IntPtr fg = GetForegroundWindow();
-        var area = System.Windows.Forms.Screen.FromHandle(fg != IntPtr.Zero ? fg : _hwnd).WorkingArea;
-
-        // Twice: the first move can land on a monitor with another DPI, which resizes the window
-        for (int pass = 0; pass < 2; pass++)
-        {
-            GetWindowRect(_hwnd, out RECT r);
-            int w = r.Right - r.Left, h = r.Bottom - r.Top;
-            int margin = (int)Math.Round(EdgeMarginDip * GetDpiForWindow(_hwnd) / 96.0);
-
-            int x = position switch
-            {
-                HudPosition.TopLeft => area.Left + margin,
-                HudPosition.TopRight or HudPosition.BottomRight => area.Right - w - margin,
-                _ => area.Left + (area.Width - w) / 2
-            };
-            int y = position is HudPosition.BottomRight or HudPosition.BottomCenter
-                ? area.Bottom - h - margin
-                : area.Top + margin;
-
-            SetWindowPos(_hwnd, HWND_TOPMOST, x, y, 0, 0, SWP_NOSIZE | SWP_NOACTIVATE);
-        }
-    }
+    private void Reposition(HudPosition position, ScreenSpot? spot)
+        => OverlayPlacement.Place(_hwnd, position, spot, EdgeMarginDip);
 
     #region Win32
 
@@ -83,20 +58,11 @@ public partial class ModeIndicatorWindow : Window
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWA_BORDER_COLOR = 34;
     private const int DWMWCP_ROUNDSMALL = 3;
-    private static readonly IntPtr HWND_TOPMOST = new(-1);
-    private const uint SWP_NOSIZE = 0x0001;
-    private const uint SWP_NOACTIVATE = 0x0010;
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT { public int Left, Top, Right, Bottom; }
 
     [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hwnd, int index);
     [DllImport("user32.dll")] private static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
     [DllImport("user32.dll")] private static extern bool SetLayeredWindowAttributes(IntPtr hwnd, uint key, byte alpha, uint flags);
-    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hwnd, out RECT rect);
-    [DllImport("user32.dll")] private static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
-    [DllImport("user32.dll")] private static extern uint GetDpiForWindow(IntPtr hwnd);
     [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
     #endregion

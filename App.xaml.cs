@@ -12,6 +12,17 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
 
+        // Started by Windows at sign-in while a copy is already running (e.g. both the old normal
+        // and the new administrator start fired once): the running copy wins.
+        if (e.Args.Any(a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase)))
+        {
+            using var me = System.Diagnostics.Process.GetCurrentProcess();
+            if (System.Diagnostics.Process.GetProcessesByName(me.ProcessName).Any(p => p.Id != me.Id))
+            {
+                Environment.Exit(0); // before the main window exists (it would install the hooks)
+            }
+        }
+
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
         {
             LogCrash(args.ExceptionObject as Exception);

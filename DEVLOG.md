@@ -33,6 +33,13 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 
 ---
 
+## To-do
+
+- [ ] **Language support**: every visible text is still English and written straight into the XAML / code. Move the texts into resource files (e.g. `Strings.resx` + `Strings.de.resx`), pick the language from Windows with a manual choice in Settings, and translate. SmartNotes already has a `LocalizationService` that could be reused.
+- [ ] Mouse buttons are shown as `XBUTTON1` / `XBUTTON2` in the list; "Mouse 4" / "Mouse 5" would read better.
+
+---
+
 ## Changelog & Evolution
 
 ### Version 2.0.0
@@ -175,3 +182,24 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 - **Single macros as files**: row menu → "Export…" writes one macro as `.json`; Import (button or drop) tells macro files from profile files and adds macros to the profile on screen, switched off.
 - `MACROMASTER_DATA_DIR` environment variable points the app at another data folder (used for trying things out without touching the real profiles).
 - **Tests** (`Tests/`, run `dotnet test Tests`): drive the real engine with a fake keyboard / foreground app and a recording simulator (`InputSimulator.Send*` are the only methods that touch real input). No hooks are installed and nothing is sent to the PC.
+
+### Version 2.5.1 - Interface scales with the screen (2026-11-12)
+- **Auto UI scale** (`UI/UiScale.cs`): the layout was designed on 1080p, so on 1440p / 4K screens with Windows scaling at 100 % everything looked small. Auto scales the whole window (a `LayoutTransform` on the root) by how much bigger the monitor is than 1920 × 1080 in Windows' own scaled pixels, never below 100 %: 133 % on 1440p, 200 % on 4K at 100 % Windows scaling. Ultrawides go by their height. The window keeps its share of the screen when dragged to another monitor (rescaled on `WM_EXITSIZEMOVE`, on resolution changes, and on moves without a drag), and opens centred on the monitor with the mouse. Settings → Display → Interface size: Auto or a fixed 80–200 %.
+- Text uses `Display` formatting at exactly 100 % (sharpest) and `Ideal` when scaled (the dynamic resource `UiTextFormattingMode`). Dialogs follow the main window's scale; the notification and mode indicator use the scale of the monitor they appear on. Drop-downs, menus and tooltips scale with the window automatically.
+
+### Version 2.6.0 - Any position, admin autostart, silent updates (2026-11-12) — app version 1.1.0
+- **App version**: `MacroMaster.csproj` now has `<Version>1.1.0</Version>` (the first GitHub release was v1.0.0). The headings in this log are the log's own numbering; the csproj version is what releases and the updater use.
+- **Every position for popups** (`UI/OverlayPlacement.cs`, shared by the notification and the mode indicator): top left / center / right, bottom left / center / right, and **Custom**. Custom opens `UI/Windows/PositionPickerWindow`, a stand-in you drag anywhere (Enter, double-click or clicking elsewhere keeps it, Esc cancels). The spot is saved as fractions of the monitor's work area (`ScreenSpot`, `AppSettings.OverlayCustomSpot` / `ModeIndicatorCustomSpot`), so it lands in the same place at any resolution, on the monitor of the app in front, and is always kept fully on screen. `HudPosition` got `BottomLeft` and `Custom` at the end (saved as numbers). The settings lists now map items to positions by tag, not index. Notifications got a "Show preview" button like the indicator.
+- **Per-macro "Show on the mode indicator"** (`MacroDefinition.ShowOnIndicator`, editor → How often, shown only for loops / while held / mode groups): a mode group's active mode is named on the indicator as before; a loop or while-held macro is named there while it runs ("Fish farm running"). On for new macros. Data version 5 switches it off for existing loops so nothing new appears unasked; mode groups keep showing. The engine refreshes the indicator when a loop starts or stops.
+- **Start with Windows as administrator** (`Core/Native/AutoStartManager.cs`, `AppSettings.StartAsAdmin`, on by default): a scheduled task "MacroMaster" with `HighestAvailable` rights and a logon trigger replaces the `Run` registry value, the only way Windows starts something elevated at sign-in without asking every time. Windows asks for permission once, when "Start with Windows" / "As administrator" is changed and saved (or not at all if MacroMaster already runs as administrator). The task has no 3-day time limit, runs on battery and at normal priority. If permission is refused it falls back to the normal `Run` start and says so. Only one of the two is ever registered; `HKCU\Software\MacroMaster\AdminAutostartTask` remembers the task because a normal process may not be able to read an elevated task. A copy started with `--autostart` quits at once if another copy is already running (`App.OnStartup`). Downside of running elevated: Explorer can't drag files onto the window.
+- **Silent updates from GitHub** (`UI/AppUpdater.cs`, `AppSettings.AutoUpdate`, on by default): 20 s after start and every 6 h it reads `releases/latest` of OlfJD/MacroMaster; a newer tag (`vX.Y.Z`) with a `.zip` asset is downloaded and extracted to `%TEMP%\MacroMaster-update` in the background. It is installed at a quiet moment (no macro running, editor closed, window not active): a hidden batch file waits for MacroMaster to exit cleanly, copies the files over the app folder and starts it again in the same state (tray or window, same rights). No popups. Data in `%AppData%` is untouched. Skipped in Debug builds and when the app folder isn't writable.
+- **Hover explanations**: every settings row and the editor's main options (how often, hotkey, app, category, mode group, wait variation) explain themselves in a tooltip.
+- **Status bar key**: the `F12` keycap next to "Stop everything" is smaller and flat (10 px, secondary colour, 1 px border) so it no longer outweighs the text.
+- **Logo**: the brand row is 52 px and the logo sits 18 px from the top, the same as from the left edge.
+- Tests: indicator for running loops / the switch off, release tag parsing, the scheduled task definition.
+
+### Version 2.6.1 - README, screenshots, first self-updating release (2026-11-12) — app version 1.1.0
+- **README rewritten** around what the app does, with screenshots in `docs/screenshots/` (main list, mode group, editor, overlay, settings). They were taken from demo profiles (everyday utilities, Minecraft, photo editing) on a 1440p screen at the automatic 133 % scale, with `PrintWindow` so the window edges are clean.
+- **Release asset name is now version-free**: `MacroMaster-win-x64.zip`, so `releases/latest/download/MacroMaster-win-x64.zip` in the README always points at the newest build. The updater accepts any `.zip`. Release steps are in the README's developer section.
+- **Test copies leave Windows alone**: a copy started with `MACROMASTER_DATA_DIR` (own data folder, for trying things out) no longer syncs the "Start with Windows" entry or updates itself. Both are shared with the real installation, and a test copy with "Start with Windows" off removed the real `Run` entry.
+

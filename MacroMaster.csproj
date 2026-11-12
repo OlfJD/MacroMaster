@@ -13,6 +13,9 @@
     <AssemblyName>MacroMaster</AssemblyName>
     <RootNamespace>MacroMaster</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <!-- The app version. AppUpdater compares it with the latest GitHub release tag (vX.Y.Z):
+         bump it for every release and tag the release with the same number. -->
+    <Version>1.1.0</Version>
   </PropertyGroup>
 
   <!-- The test project lives in a subfolder; keep its files out of the app itself -->
