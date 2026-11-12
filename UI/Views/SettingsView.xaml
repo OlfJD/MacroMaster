@@ -180,6 +180,23 @@
                     </StackPanel>
                 </controls:SmoothBorder>
 
+                <!-- DISPLAY -->
+                <TextBlock Text="DISPLAY" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
+                <controls:SmoothBorder Style="{StaticResource Card}" Margin="0,0,0,24">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,16,0">
+                            <TextBlock Text="Interface size" Style="{StaticResource RowTitle}"/>
+                            <TextBlock x:Name="TxtUiScaleHint" Style="{StaticResource Hint}"
+                                       Text="Auto grows the interface with bigger screens, so it looks the same on 1080p, 1440p and 4K."/>
+                        </StackPanel>
+                        <ComboBox x:Name="CmbUiScale" Grid.Column="1" Width="208" VerticalAlignment="Center"/>
+                    </Grid>
+                </controls:SmoothBorder>
+
                 <!-- SYSTEM -->
                 <TextBlock Text="SYSTEM" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
                 <controls:SmoothBorder Style="{StaticResource Card}">

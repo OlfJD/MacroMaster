@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using MacroMaster.Core.Models;
 using MacroMaster.Core.Native;
+using MacroMaster.UI;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
 
@@ -49,6 +50,19 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         TxtHudDuration.Text = _settings.HudDurationMs.ToString();
         ChkModeIndicator.IsChecked = _settings.ShowModeIndicator;
         CmbIndicatorPosition.SelectedIndex = (int)_settings.ModeIndicatorPosition;
+
+        // Display
+        double auto = UiScale.AutoFor(new System.Windows.Interop.WindowInteropHelper(Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow).Handle);
+        foreach (int percent in UiScale.Choices)
+        {
+            CmbUiScale.Items.Add(new ComboBoxItem
+            {
+                Content = percent == 0 ? $"Auto ({auto * 100:0} % on this screen)" : $"{percent} %",
+                Tag = percent
+            });
+        }
+        int current = Array.IndexOf(UiScale.Choices, _settings.UiScalePercent);
+        CmbUiScale.SelectedIndex = Math.Max(0, current);
 
         // System
         ChkStartWithWindows.IsChecked = _settings.StartWithWindows;
@@ -217,6 +231,9 @@ public partial class SettingsView : System.Windows.Controls.UserControl
 
         _settings.ShowModeIndicator = ChkModeIndicator.IsChecked == true;
         _settings.ModeIndicatorPosition = (HudPosition)Math.Max(0, CmbIndicatorPosition.SelectedIndex);
+
+        // Display
+        if (CmbUiScale.SelectedItem is ComboBoxItem { Tag: int percent }) _settings.UiScalePercent = percent;
 
         // System
         _settings.StartWithWindows = ChkStartWithWindows.IsChecked == true;

@@ -14,7 +14,7 @@
         FontFamily="{StaticResource UiFont}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextFormattingMode="{DynamicResource UiTextFormattingMode}"
         TextOptions.TextRenderingMode="ClearType">
 
     <!-- The always-visible "which mode is active" label. Solid window like the notification popup

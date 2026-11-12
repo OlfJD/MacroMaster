@@ -79,6 +79,7 @@ public partial class HudOverlayWindow : Window
                 IconBadge.Background = new SolidColorBrush(Blend(Color.FromRgb(0x1D, 0x1F, 0x26), accent, 0.16));
             }
 
+            UiScale.ApplyTo((FrameworkElement)Content, UiScale.Resolve(GetForegroundWindow()));
             if (!IsVisible) Show();
             UpdateLayout();
             Reposition(position);

@@ -39,11 +39,99 @@ public partial class MainWindow : Window
 
         InitializeComponent();
         WindowHelper.Attach(this, RootGrid);
+        // Needed before the window first appears (settings are fully loaded later, in Loaded)
+        UiScale.Preference = MacroJsonSerializer.LoadSettings(_settingsFilePath).UiScalePercent;
+        SourceInitialized += (_, _) => InitUiScale();
         StateChanged += (_, _) => MaximizeIcon.IconKey = WindowState == WindowState.Maximized ? "restore" : "maximize";
 
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
     }
+
+    #region Interface scale (see UiScale)
+
+    // Sizes from MainWindow.xaml, i.e. at 100 %
+    private const double BaseWidth = 1180, BaseHeight = 780, BaseMinWidth = 940, BaseMinHeight = 600, BaseCaption = 44;
+    private double _uiScale = 1.0;
+    private IntPtr _uiScaleMonitor;
+    private bool _inSizeMove;
+
+    private void InitUiScale()
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook(UiScaleHook);
+        LocationChanged += (_, _) => { if (!_inSizeMove) UpdateUiScale(); }; // Win+Shift+Arrow etc.
+
+        // Open centred on the monitor with the mouse (like CenterScreen did), at that monitor's scale
+        WindowStartupLocation = WindowStartupLocation.Manual;
+        var monitor = UiScale.MonitorAtCursor();
+        if (monitor == IntPtr.Zero) monitor = UiScale.MonitorOf(hwnd);
+        _uiScaleMonitor = monitor;
+        ApplyUiScale(UiScale.ResolveOn(monitor), center: true, monitor);
+    }
+
+    private IntPtr UiScaleHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        const int WM_DISPLAYCHANGE = 0x007E, WM_ENTERSIZEMOVE = 0x0231, WM_EXITSIZEMOVE = 0x0232;
+        switch (msg)
+        {
+            case WM_ENTERSIZEMOVE: _inSizeMove = true; break;
+            // Only once the drag ends: resizing the window under the mouse mid-drag feels broken
+            case WM_EXITSIZEMOVE: _inSizeMove = false; Dispatcher.BeginInvoke(() => UpdateUiScale()); break;
+            case WM_DISPLAYCHANGE: Dispatcher.BeginInvoke(() => UpdateUiScale(force: true)); break;
+        }
+        return IntPtr.Zero;
+    }
+
+    /// <summary>Re-checks the scale after a move to another monitor, a resolution change or a new setting.</summary>
+    private void UpdateUiScale(bool force = false)
+    {
+        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        var monitor = UiScale.MonitorOf(hwnd);
+        if (!force && monitor == _uiScaleMonitor) return;
+        _uiScaleMonitor = monitor;
+
+        double scale = UiScale.Resolve(hwnd);
+        if (Math.Abs(scale - _uiScale) > 0.001) ApplyUiScale(scale, center: false);
+    }
+
+    private void ApplyUiScale(double scale, bool center, IntPtr monitor = default)
+    {
+        if (monitor == IntPtr.Zero) monitor = UiScale.MonitorOf(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        double old = _uiScale;
+        _uiScale = scale;
+        UiScale.SetCurrent(scale);
+        UiScale.ApplyTo(RootGrid, scale);
+        UiScale.ScaleCaption(this, BaseCaption, scale);
+
+        // Read the current size first: a bigger MinWidth below already grows the window
+        double curW = ActualWidth > 0 ? ActualWidth : Width, curH = ActualHeight > 0 ? ActualHeight : Height;
+        double cx = center ? double.NaN : Left + curW / 2, cy = center ? double.NaN : Top + curH / 2;
+
+        var work = UiScale.WorkAreaDipOn(monitor);
+        MinWidth = Math.Min(BaseMinWidth * scale, work.Width);
+        MinHeight = Math.Min(BaseMinHeight * scale, work.Height);
+        if (WindowState != WindowState.Normal) return;
+
+        // Keep the share of the screen the window had; never bigger than the screen
+        double w = center ? BaseWidth * scale : curW / old * scale;
+        double h = center ? BaseHeight * scale : curH / old * scale;
+        w = Math.Clamp(w, MinWidth, work.Width);
+        h = Math.Clamp(h, MinHeight, work.Height);
+
+        if (center)
+        {
+            cx = work.Left + work.Width / 2;
+            cy = work.Top + work.Height / 2;
+        }
+        Width = w;
+        Height = h;
+        Left = Math.Clamp(cx - w / 2, work.Left, work.Right - w);
+        Top = Math.Clamp(cy - h / 2, work.Top, work.Bottom - h);
+    }
+
+    #endregion
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
@@ -1045,6 +1133,8 @@ public partial class MainWindow : Window
             if (!saved) return;
             SaveState();
             SyncUiStates();
+            UiScale.Preference = _engine.Settings.UiScalePercent;
+            UpdateUiScale(force: true);
             _engine.RefreshModeIndicator();
             ApplyModeIndicator(_engine.ModeIndicatorText); // picks up a new position
             Notify("Settings saved", "Changes are live", "logo");

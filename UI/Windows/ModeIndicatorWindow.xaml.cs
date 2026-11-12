@@ -38,6 +38,7 @@ public partial class ModeIndicatorWindow : Window
     public void ShowMode(string text, HudPosition position)
     {
         ModeText.Text = text;
+        UiScale.ApplyTo((FrameworkElement)Content, UiScale.Resolve(GetForegroundWindow()));
         if (!IsVisible) Show();
         UpdateLayout();
         Reposition(position);

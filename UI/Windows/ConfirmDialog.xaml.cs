@@ -9,6 +9,7 @@ public partial class ConfirmDialog : Window
     {
         InitializeComponent();
         WindowHelper.Attach(this);
+        UiScale.ApplyToDialog(this);
     }
 
     /// <summary>Shows a themed confirmation. Pass <c>cancelText: null</c> for a single-button notice.</summary>

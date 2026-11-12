@@ -146,9 +146,12 @@
          Base element defaults
          ============================================================ -->
 
+    <!-- Display at 100 %, Ideal when the interface is scaled (set by UiScale.SetCurrent) -->
+    <x:Static x:Key="UiTextFormattingMode" Member="TextFormattingMode.Display"/>
+
     <!-- "Display" snaps glyphs to the pixel grid: much sharper than "Ideal" at 100 % scaling -->
     <Style TargetType="{x:Type TextBlock}">
-        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource UiTextFormattingMode}"/>
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
     </Style>
 
@@ -162,7 +165,7 @@
         <Setter Property="WindowStyle" Value="SingleBorderWindow"/>
         <Setter Property="UseLayoutRounding" Value="True"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
-        <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+        <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource UiTextFormattingMode}"/>
         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType"/>
         <Setter Property="WindowChrome.WindowChrome">
             <Setter.Value>
@@ -1177,7 +1180,7 @@
                             <ContentPresenter.Resources>
                                 <Style TargetType="{x:Type TextBlock}">
                                     <Setter Property="TextWrapping" Value="Wrap"/>
-                                    <Setter Property="TextOptions.TextFormattingMode" Value="Display"/>
+                                    <Setter Property="TextOptions.TextFormattingMode" Value="{DynamicResource UiTextFormattingMode}"/>
                                 </Style>
                             </ContentPresenter.Resources>
                         </ContentPresenter>

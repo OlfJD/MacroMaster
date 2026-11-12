@@ -15,7 +15,7 @@
         FontFamily="{StaticResource UiFont}"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True"
-        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextFormattingMode="{DynamicResource UiTextFormattingMode}"
         TextOptions.TextRenderingMode="ClearType">
 
     <!-- Solid (non-transparent) window on purpose: transparent WPF windows can't use ClearType,

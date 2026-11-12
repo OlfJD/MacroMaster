@@ -14,6 +14,7 @@ public partial class NewProfileDialog : Window
     {
         InitializeComponent();
         WindowHelper.Attach(this);
+        UiScale.ApplyToDialog(this);
         _existing = existing;
 
         if (existing != null)

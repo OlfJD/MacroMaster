@@ -54,6 +54,12 @@ public class AppSettings
     public bool ShowModeIndicator { get; set; } = true;
     public HudPosition ModeIndicatorPosition { get; set; } = HudPosition.TopLeft;
 
+    /// <summary>
+    /// Size of the interface: 0 = Auto (grows with the screen, see UI.UiScale), otherwise a fixed
+    /// percentage such as 125.
+    /// </summary>
+    public int UiScalePercent { get; set; } = 0;
+
     // Window & System
     public bool StartWithWindows { get; set; } = false;
     public bool MinimizeToTray { get; set; } = true;
