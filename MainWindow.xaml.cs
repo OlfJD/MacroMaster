@@ -133,8 +133,26 @@ public partial class MainWindow : Window
 
     #endregion
 
-    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e) => StartUp();
+
+    private bool _started;
+
+    /// <summary>
+    /// Started by Windows at sign-in: get everything running (hooks, tray, updater) without ever
+    /// showing the window. Showing it and hiding it again left a minimized window that Windows
+    /// listed but WPF never drew - restoring it from the taskbar gave a blank black window.
+    /// </summary>
+    public void StartHidden()
     {
+        new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle(); // hotkeys and tray need the handle
+        StartUp();
+    }
+
+    private void StartUp()
+    {
+        if (_started) return; // shown later from the tray: Loaded fires then, everything already runs
+        _started = true;
+
         var settings = MacroJsonSerializer.LoadSettings(_settingsFilePath);
         var load = MacroJsonSerializer.LoadProfiles(_profilesFilePath);
         var profiles = load.Profiles;
@@ -176,18 +194,9 @@ public partial class MainWindow : Window
             windowShown: () => IsVisible && WindowState != WindowState.Minimized,
             shutdown: QuitForUpdate);
 
-        bool isAutostart = Environment.GetCommandLineArgs().Any(arg =>
-            arg.Equals("--autostart", StringComparison.OrdinalIgnoreCase) ||
-            arg.Equals("-silent", StringComparison.OrdinalIgnoreCase) ||
-            arg.Equals("-minimized", StringComparison.OrdinalIgnoreCase));
-        if (isAutostart)
-        {
-            Hide();
-            WindowState = WindowState.Minimized;
-        }
-
         if (load.BrokenFileBackup != null)
         {
+            if (!IsVisible) ShowAndRestore(); // a dialog needs a window that has been shown
             ConfirmDialog.Show(this, "Your profiles file couldn't be read",
                 (load.Profiles != null
                     ? "MacroMaster restored the last good copy instead."

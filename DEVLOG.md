@@ -203,3 +203,7 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 - **Release asset name is now version-free**: `MacroMaster-win-x64.zip`, so `releases/latest/download/MacroMaster-win-x64.zip` in the README always points at the newest build. The updater accepts any `.zip`. Release steps are in the README's developer section.
 - **Test copies leave Windows alone**: a copy started with `MACROMASTER_DATA_DIR` (own data folder, for trying things out) no longer syncs the "Start with Windows" entry or updates itself. Both are shared with the real installation, and a test copy with "Start with Windows" off removed the real `Run` entry.
 
+
+### Version 2.6.2 - No blank window at sign-in (2026-11-15) — app version 1.1.1
+- **Autostart never shows the window any more.** It used to be shown by `StartupUri`, then hidden in `Loaded`, then set to `Minimized`. Setting the state after hiding put it back on screen as a minimized window that Windows listed but WPF treated as hidden and never drew, so restoring it from the taskbar gave a blank black window. `App.OnStartup` now creates the window itself: with `--autostart` (or `-silent` / `-minimized`) it only creates the handle (`StartHidden`), and hooks, tray, autostart sync and updater start without showing anything. Opening it later from the tray shows it normally; the start-up work runs only once (`_started`).
+- If the profiles file was unreadable on a hidden start, the window is shown first so the message has an owner.
