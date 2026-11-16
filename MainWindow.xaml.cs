@@ -60,6 +60,7 @@ public partial class MainWindow : Window
     {
         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
         System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook(UiScaleHook);
+        System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook(BlockOutsideShow);
         LocationChanged += (_, _) => { if (!_inSizeMove) UpdateUiScale(); }; // Win+Shift+Arrow etc.
 
         // Open centred on the monitor with the mouse (like CenterScreen did), at that monitor's scale
@@ -138,14 +139,40 @@ public partial class MainWindow : Window
     private bool _started;
 
     /// <summary>
-    /// Started by Windows at sign-in: get everything running (hooks, tray, updater) without ever
-    /// showing the window. Showing it and hiding it again left a minimized window that Windows
-    /// listed but WPF never drew - restoring it from the taskbar gave a blank black window.
+    /// Started by Windows at sign-in: get everything running (hooks, tray, updater) without the
+    /// window existing on screen at all. Its Win32 window is only created the first time it is
+    /// opened from the tray. A created-but-hidden window can be made visible by Windows itself at
+    /// sign-in, behind WPF's back; WPF then never draws it and it sits in the taskbar as a black
+    /// window (see <see cref="BlockOutsideShow"/>). Nothing here needs the window: the hooks run on
+    /// their own thread and the tray icon has its own window.
     /// </summary>
-    public void StartHidden()
+    public void StartHidden() => StartUp();
+
+    /// <summary>
+    /// Only WPF may put this window on screen. Windows can show a hidden window on its own (e.g.
+    /// applying the "show normally" start-up flag at sign-in, or restore requests from outside);
+    /// WPF doesn't know it is visible then and never renders it, which leaves a black window in
+    /// the taskbar. So a show request that arrives while WPF has the window hidden is dropped.
+    /// </summary>
+    private IntPtr BlockOutsideShow(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        new System.Windows.Interop.WindowInteropHelper(this).EnsureHandle(); // hotkeys and tray need the handle
-        StartUp();
+        const int WM_WINDOWPOSCHANGING = 0x0046;
+        const uint SWP_SHOWWINDOW = 0x0040;
+        if (msg != WM_WINDOWPOSCHANGING || lParam == IntPtr.Zero || Visibility == Visibility.Visible) return IntPtr.Zero;
+
+        var pos = System.Runtime.InteropServices.Marshal.PtrToStructure<WINDOWPOS>(lParam);
+        if ((pos.flags & SWP_SHOWWINDOW) == 0) return IntPtr.Zero;
+        pos.flags &= ~SWP_SHOWWINDOW;
+        System.Runtime.InteropServices.Marshal.StructureToPtr(pos, lParam, false);
+        return IntPtr.Zero;
+    }
+
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+    private struct WINDOWPOS
+    {
+        public IntPtr hwnd, hwndInsertAfter;
+        public int x, y, cx, cy;
+        public uint flags;
     }
 
     private void StartUp()
