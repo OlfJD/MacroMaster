@@ -212,3 +212,8 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 - 1.1.1 still created the main window's Win32 window at sign-in (`EnsureHandle`), only hidden. Windows can show a hidden window on its own at sign-in; WPF then doesn't know it is visible, never draws it, and it sits in the taskbar as a black window until opened from the tray. Reproduced by showing the hidden window from outside (`ShowWindow`): black.
 - `StartHidden` no longer creates the window at all; it is created the first time it is opened from the tray. Nothing needs it before: hooks run on their own thread, the tray icon has its own window.
 - `MainWindow.BlockOutsideShow`: while WPF has the window hidden, any show request from outside is dropped (`SWP_SHOWWINDOW` removed in `WM_WINDOWPOSCHANGING`), so closing to the tray can't end in a black window either.
+
+### Version 2.6.4 - Dev builds leave the Windows start entry alone (2026-11-17)
+- **Why the black window kept coming back after 1.1.1 / 1.1.2:** the sign-in entry pointed at `bin\Debug\...\MacroMaster.exe`, a dev build from 2026-11-12 (app version 1.1.0, still with the old bug). Every copy writes its own path into the start entry when it launches, dev builds included, and dev builds never update themselves, so the fixes never reached sign-in.
+- Debug builds (`AppUpdater.IsDevBuild`) now skip `SyncAutostart` completely, just as they already skipped updating. The installed copy owns the start entry; in a dev build the "Start with Windows" setting is saved but changes nothing in Windows.
+- The PC's copy is now installed in `%LocalAppData%\Programs\MacroMaster` (Release build of 1.1.2), which updates itself from GitHub and is what the start entry points at.

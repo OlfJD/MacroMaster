@@ -1278,6 +1278,9 @@ public partial class MainWindow : Window
     private void SyncAutostart(bool mayAskForPermission)
     {
         if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MACROMASTER_DATA_DIR"))) return; // see MainWindow_Loaded
+        // A dev build (bin\Debug) wrote its own path into the Windows start entry, so sign-in started
+        // that never-updated copy instead of the installed one. The installed copy owns the entry.
+        if (AppUpdater.IsDevBuild) return;
         var s = _engine.Settings;
         bool enable = s.StartWithWindows, asAdmin = s.StartAsAdmin;
         Task.Run(() =>

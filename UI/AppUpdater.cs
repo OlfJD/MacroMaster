@@ -75,7 +75,8 @@ public static class AppUpdater
         _checkTimer.Start();
     }
 
-    private static bool IsDevBuild =>
+    /// <summary>A Debug build run from source: it never updates itself or registers itself to start with Windows.</summary>
+    internal static bool IsDevBuild =>
 #if DEBUG
         true;
 #else
