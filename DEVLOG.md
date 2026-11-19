@@ -218,7 +218,7 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 - Debug builds (`AppUpdater.IsDevBuild`) now skip `SyncAutostart` completely, just as they already skipped updating. The installed copy owns the start entry; in a dev build the "Start with Windows" setting is saved but changes nothing in Windows.
 - The PC's copy is now installed in `%LocalAppData%\Programs\MacroMaster` (Release build of 1.1.2), which updates itself from GitHub and is what the start entry points at.
 
-### Version 2.7.0 - Mono redesign: card rows, SoundSwitcher look (2026-11-19)
+### Version 2.7.0 - Mono redesign: card rows, SoundSwitcher look (2026-11-19) — app version 1.2.0
 - Picked **D (card rows), accent 1 (mono), Segoe UI** from `design/redesign-board.html` (the other directions stay there in case they are revisited). The violet accent was on every switch, button, category label and selection at once, plus a green engine card and amber mode tags, and the list was a table with headers and hairlines.
 - **Palette** (`UI/Themes/DarkTheme.xaml`): SoundSwitcher's "Dark" neutrals; one light accent (switches, primary button, active mode, focus), text on it is near-black. Pure white read too stark, so the accent is cream `#ECE4D3` (hover `#F3ECDD`, pressed `#DCD2BE`); the greys and text stay neutral. Colour is left for meaning only: green running, amber warnings, red danger. Radii 8 / 12. Notification and HUD accent is light grey instead of violet.
 - **Macro list**: no table card, column headers or row lines. Every macro is a rounded card: switch, name and details, hotkey keycaps, "Once · 11 steps", edit / delete on hover. Category text is grey instead of accent.
