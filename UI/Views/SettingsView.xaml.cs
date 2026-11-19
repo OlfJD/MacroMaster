@@ -43,8 +43,90 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         InitializeComponent();
         _settings = settings;
         LoadSettings();
-        Unloaded += (_, _) => StopKeyCapture(); // never leave a keyboard hook behind
+        Unloaded += (_, _) =>
+        {
+            StopKeyCapture(); // never leave a keyboard hook behind
+            if (!_saved) AccentTheme.Apply(_settings.AccentColor); // left without saving: undo the live accent preview
+        };
     }
+
+    #region Accent colour
+
+    private bool _saved;
+    private bool _settingAccentText;
+
+    private void FillAccentSwatches()
+    {
+        foreach (var (name, hex) in AccentTheme.Presets)
+        {
+            AccentTheme.TryParse(hex, out var c);
+            var swatch = new System.Windows.Controls.Button
+            {
+                Width = 28,
+                Height = 28,
+                Margin = new Thickness(0, 0, 8, 8),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = name,
+                Tag = hex,
+                FocusVisualStyle = (Style)FindResource("FocusRing"),
+                Template = SwatchTemplate(new System.Windows.Media.SolidColorBrush(c))
+            };
+            System.Windows.Automation.AutomationProperties.SetName(swatch, $"{name} accent");
+            swatch.Click += (_, _) => SetAccent(hex);
+            AccentSwatches.Children.Add(swatch);
+        }
+    }
+
+    /// <summary>A round colour dot; the chosen one gets a ring (see <see cref="MarkChosenSwatch"/>).</summary>
+    private static ControlTemplate SwatchTemplate(System.Windows.Media.Brush fill)
+    {
+        var ring = new FrameworkElementFactory(typeof(Border), "Ring");
+        ring.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
+        ring.SetValue(Border.BorderThicknessProperty, new Thickness(2));
+        ring.SetValue(Border.BorderBrushProperty, System.Windows.Media.Brushes.Transparent);
+        ring.SetValue(Border.PaddingProperty, new Thickness(3));
+        var dot = new FrameworkElementFactory(typeof(Border));
+        dot.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+        dot.SetValue(Border.BackgroundProperty, fill);
+        ring.AppendChild(dot);
+        return new ControlTemplate(typeof(System.Windows.Controls.Button)) { VisualTree = ring };
+    }
+
+    private void MarkChosenSwatch()
+    {
+        foreach (var child in AccentSwatches.Children.OfType<System.Windows.Controls.Button>())
+        {
+            child.ApplyTemplate();
+            if (child.Template?.FindName("Ring", child) is Border ring)
+            {
+                bool chosen = string.Equals(child.Tag as string, AccentTheme.Current, StringComparison.OrdinalIgnoreCase);
+                ring.BorderBrush = chosen ? (System.Windows.Media.Brush)FindResource("TextPrimaryBrush") : System.Windows.Media.Brushes.Transparent;
+            }
+        }
+    }
+
+    /// <summary>Shows the colour everywhere right away (Save keeps it, Cancel undoes it).</summary>
+    private void SetAccent(string hex)
+    {
+        AccentTheme.Apply(hex);
+        _settingAccentText = true;
+        TxtAccent.Text = AccentTheme.Current;
+        _settingAccentText = false;
+        MarkChosenSwatch();
+    }
+
+    private void TxtAccent_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_settingAccentText || !IsLoaded) return;
+        // Only complete colours are applied; half-typed ones wait
+        if (AccentTheme.TryParse(TxtAccent.Text, out _))
+        {
+            AccentTheme.Apply(TxtAccent.Text);
+            MarkChosenSwatch();
+        }
+    }
+
+    #endregion
 
     private void LoadSettings()
     {
@@ -70,6 +152,12 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         _loading = false;
 
         // Display
+        FillAccentSwatches();
+        _settingAccentText = true;
+        TxtAccent.Text = AccentTheme.Current;
+        _settingAccentText = false;
+        Loaded += (_, _) => MarkChosenSwatch();
+
         double auto = UiScale.AutoFor(new System.Windows.Interop.WindowInteropHelper(Window.GetWindow(this) ?? System.Windows.Application.Current.MainWindow).Handle);
         foreach (int percent in UiScale.Choices)
         {
@@ -299,6 +387,7 @@ public partial class SettingsView : System.Windows.Controls.UserControl
     private void CloseBtn_Click(object sender, RoutedEventArgs e)
     {
         StopKeyCapture();
+        AccentTheme.Apply(_settings.AccentColor); // undo the live preview
         Finished?.Invoke(false);
     }
 
@@ -345,6 +434,14 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         _settings.ModeIndicatorCustomSpot = _indicatorSpot;
 
         // Display
+        if (!AccentTheme.TryParse(TxtAccent.Text, out _))
+        {
+            Windows.ConfirmDialog.Show(Window.GetWindow(this)!, "That accent colour isn't a colour",
+                $"“{TxtAccent.Text.Trim()}” isn't a colour MacroMaster understands. Pick a swatch or type one like #ECE4D3.", "OK", cancelText: null);
+            return;
+        }
+        _settings.AccentColor = AccentTheme.Current;
+        _saved = true;
         if (CmbUiScale.SelectedItem is ComboBoxItem { Tag: int percent }) _settings.UiScalePercent = percent;
 
         // System

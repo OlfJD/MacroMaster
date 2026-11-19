@@ -28,7 +28,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- Either the app logo, or a status icon on a tinted tile -->
-        <Image x:Name="HudLogo" Source="{StaticResource LogoMark}" Width="24" Height="24" Margin="2,0,14,0"
+        <Image x:Name="HudLogo" Source="{DynamicResource LogoMark}" Width="24" Height="24" Margin="2,0,14,0"
                VerticalAlignment="Center" Visibility="Collapsed"/>
         <Border x:Name="IconBadge" Width="28" Height="28" CornerRadius="{StaticResource RadiusMd}" Margin="0,0,12,0" VerticalAlignment="Center">
             <controls:AppIcon x:Name="HudIcon" IconKey="play" Size="16"/>

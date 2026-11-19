@@ -81,7 +81,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <Border Style="{StaticResource IconTile}" Width="32" Height="32" Background="{StaticResource AccentSubtleBrush}" Margin="0,0,12,0">
-                                <controls:AppIcon IconKey="zap" Size="16" Foreground="{StaticResource AccentTextBrush}"/>
+                                <controls:AppIcon IconKey="zap" Size="16" Foreground="{DynamicResource AccentTextBrush}"/>
                             </Border>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
                                 <TextBlock Text="Quick open" Style="{StaticResource RowTitle}"/>
@@ -180,6 +180,29 @@
                 <!-- DISPLAY -->
                 <TextBlock Text="DISPLAY" Style="{StaticResource SectionLabel}" Margin="0,0,0,8"/>
                 <controls:SmoothBorder Style="{StaticResource Card}" Margin="0,0,0,24">
+                    <StackPanel>
+                    <!-- Accent colour: ready-made swatches plus any colour as #RRGGBB. Changes show at once; Cancel undoes them. -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,16,0" VerticalAlignment="Center">
+                            <TextBlock Text="Accent colour" Style="{StaticResource RowTitle}"/>
+                            <TextBlock Text="Used for switches, the main buttons and the active mode. Pick one or type any colour." Style="{StaticResource Hint}"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="AccentPreview" Width="28" Height="28" CornerRadius="7" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1"
+                                    Background="{DynamicResource AccentBrush}" Margin="0,0,8,0"/>
+                            <TextBox x:Name="TxtAccent" Style="{StaticResource HotkeyBox}" Width="96" Tag="#RRGGBB" MaxLength="7"
+                                     TextChanged="TxtAccent_TextChanged" AutomationProperties.Name="Accent colour"
+                                     ToolTip="Any colour as #RRGGBB, e.g. #ECE4D3"/>
+                        </StackPanel>
+                    </Grid>
+                    <WrapPanel x:Name="AccentSwatches" Margin="0,12,0,0"/>
+
+                    <Border Style="{StaticResource RowDivider}"/>
+
                     <Grid ToolTip="How big buttons and text are. Auto looks at the screen MacroMaster is on and grows everything on bigger screens (133 % on 1440p, 200 % on 4K). Pick a number to use that size everywhere.">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -192,6 +215,7 @@
                         </StackPanel>
                         <ComboBox x:Name="CmbUiScale" Grid.Column="1" Width="208" VerticalAlignment="Center"/>
                     </Grid>
+                    </StackPanel>
                 </controls:SmoothBorder>
 
                 <!-- SYSTEM -->

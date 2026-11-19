@@ -39,7 +39,7 @@
                 <!-- Brand -->
                 <!-- Same 18 px from the top as from the left edge -->
                 <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Top" Margin="18,18,0,0">
-                    <Image Source="{StaticResource LogoMark}" Width="24" Height="24" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                    <Image Source="{DynamicResource LogoMark}" Width="24" Height="24" Margin="0,0,10,0" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                     <TextBlock Text="MacroMaster" FontFamily="{StaticResource DisplayFont}" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                 </StackPanel>
 
@@ -256,8 +256,8 @@
                                                                                 </Button>
                                                                                 <DataTemplate.Triggers>
                                                                                     <DataTrigger Binding="{Binding IsCurrentlyArmed}" Value="True">
-                                                                                        <Setter TargetName="Seg" Property="Background" Value="{StaticResource AccentBrush}"/>
-                                                                                        <Setter TargetName="Seg" Property="Foreground" Value="{StaticResource OnAccentBrush}"/>
+                                                                                        <Setter TargetName="Seg" Property="Background" Value="{DynamicResource AccentBrush}"/>
+                                                                                        <Setter TargetName="Seg" Property="Foreground" Value="{DynamicResource OnAccentBrush}"/>
                                                                                         <Setter TargetName="Seg" Property="Tag" Value="active"/>
                                                                                         <Setter TargetName="Seg" Property="ToolTip" Value="The active mode: the shared hotkey runs this one"/>
                                                                                         <Setter TargetName="SegKey" Property="BorderBrush" Value="#59111113"/>
@@ -335,7 +335,7 @@
                                              the name (last child) takes what's left and ellipsizes instead of pushing tags out of view. -->
                                         <DockPanel HorizontalAlignment="Left">
                                             <!-- Live mode of a mode group: a small cream dot before the name -->
-                                            <Ellipse x:Name="LiveDot" DockPanel.Dock="Left" Width="7" Height="7" Fill="{StaticResource AccentBrush}"
+                                            <Ellipse x:Name="LiveDot" DockPanel.Dock="Left" Width="7" Height="7" Fill="{DynamicResource AccentBrush}"
                                                      Margin="0,1,8,0" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="The live mode: the hotkey runs this one"/>
                                             <!-- Running -->
                                             <Border DockPanel.Dock="Right" Style="{StaticResource Tag}" Background="{StaticResource SuccessSubtleBrush}" Margin="8,0,0,0"
@@ -459,10 +459,10 @@
 
             <!-- Drop overlay -->
             <Border x:Name="DropOverlay" Grid.Row="1" Grid.RowSpan="3" Margin="20,0,20,16" CornerRadius="{StaticResource RadiusLg}"
-                    Background="{StaticResource ScrimBrush}" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False">
+                    Background="{StaticResource ScrimBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False">
                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Border Style="{StaticResource IconTileLg}" Background="{StaticResource AccentSubtleBrush}" Margin="0,0,0,16">
-                        <controls:AppIcon IconKey="file-code" Size="20" Foreground="{StaticResource AccentTextBrush}"/>
+                        <controls:AppIcon IconKey="file-code" Size="20" Foreground="{DynamicResource AccentTextBrush}"/>
                     </Border>
                     <TextBlock Text="Drop to import" Style="{StaticResource H2}" HorizontalAlignment="Center"/>
                     <TextBlock Text="Macro files and AutoHotkey scripts become macros here; profile files are added as profiles" Style="{StaticResource Caption}" FontSize="13" HorizontalAlignment="Center" Margin="0,6,0,0"/>

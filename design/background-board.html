@@ -1,0 +1,165 @@
+<title>MacroMaster Background Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+  /* Layout: a wrapping grid of window mock-ups (the chosen D layout), one per background palette,
+     plus an accent switcher that recolours every mock at once. */
+  :root {
+    --bg: #f2f2f4; --surface: #ffffff; --fg: #18181b; --muted: #5f6068; --line: #dcdce1;
+    --ui: "Inter", "Segoe UI", system-ui, sans-serif; --head: "Space Grotesk", "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111113; --surface: #1a1a1d; --fg: #f1f1f3; --muted: #9a9aa3; --line: #2b2b30; color-scheme: dark } }
+  :root[data-theme="dark"] { --bg: #111113; --surface: #1a1a1d; --fg: #f1f1f3; --muted: #9a9aa3; --line: #2b2b30; color-scheme: dark }
+
+  body { background: var(--bg); color: var(--fg); font-family: var(--ui); font-size: 15px; line-height: 1.5;
+         padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px; }
+  h1 { font-family: var(--head); font-size: 28px; margin: 0 0 6px; text-wrap: balance; }
+  p { margin: 0; color: var(--muted); max-width: 70ch; }
+  .controls { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px;
+              display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-bottom: 1px solid var(--line); }
+  .controls > span { color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .controls button { font: 500 13px var(--ui); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+                     padding: 5px 12px 5px 7px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+  .controls button i { width: 15px; height: 15px; border-radius: 50%; display: inline-block; border: 1px solid rgba(127,127,127,.45); }
+  .controls button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .controls button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(560px, 1fr)); gap: 16px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+  .opt { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .tag { display: flex; align-items: baseline; gap: 10px; font-weight: 600; flex-wrap: wrap; }
+  .tag b { font-family: var(--head); font-size: 20px; }
+  .tag span { color: var(--muted); font-weight: 400; font-size: 13px; }
+  .now { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; border-radius: 4px; padding: 0 6px; align-self: center; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; font: 12px ui-monospace, "Cascadia Mono", Consolas, monospace; color: var(--muted); }
+  .chips span { display: inline-flex; align-items: center; gap: 5px; }
+  .chips i { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(127,127,127,.4); }
+  .scroll { overflow-x: auto; border-radius: 10px; }
+
+  /* ===== Window mock-up (fixed product colours, set per card as --w-* variables) ===== */
+  .win { width: 540px; height: 300px; display: grid; grid-template-columns: 150px 1fr; grid-template-rows: 1fr 22px; border-radius: 10px; overflow: hidden;
+         font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 11px; line-height: 1.3;
+         background: var(--w-bg); color: var(--w-fg); }
+  .side { background: var(--w-side); padding: 10px 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 11.5px; padding: 0 3px; }
+  .logo { width: 16px; height: 16px; border-radius: 4px; display: grid; place-items: center; font-weight: 700; font-size: 9px; background: var(--acc); color: var(--on); }
+  .eng { display: flex; align-items: center; gap: 6px; padding: 7px 8px; border-radius: 9px; background: var(--w-raised); }
+  .eng .s, .prof .c { color: var(--w-muted); font-size: 9.5px; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: #3DD68C; flex: none; }
+  .lbl { font-size: 8.5px; letter-spacing: .07em; color: var(--w-muted); padding: 0 3px; }
+  .prof { display: flex; align-items: center; gap: 6px; padding: 6px 7px; border-radius: 8px; }
+  .prof.sel { background: var(--w-raised); }
+  .grow { flex: 1; min-width: 0; }
+  .sw { width: 24px; height: 14px; border-radius: 7px; background: var(--acc); position: relative; flex: none; }
+  .sw::after { content: ""; position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--on); }
+  .sw.off { background: var(--w-hover); }
+  .sw.off::after { right: auto; left: 3px; background: var(--w-muted); }
+  .main { padding: 12px 14px 8px; display: flex; flex-direction: column; gap: 8px; min-width: 0; overflow: hidden; }
+  .top { display: flex; align-items: center; gap: 6px; }
+  .top h3 { margin: 0; font-size: 15px; font-weight: 600; }
+  .sub { color: var(--w-muted); font-size: 9.5px; }
+  .btn { height: 22px; padding: 0 9px; border-radius: 6px; font-weight: 600; font-size: 10px; display: inline-flex; align-items: center; background: var(--w-raised); color: var(--w-fg); }
+  .btn.pri { background: var(--acc); color: var(--on); }
+  .search { height: 22px; width: 150px; border-radius: 6px; border: 1px solid var(--w-line); color: var(--w-muted); display: flex; align-items: center; padding: 0 8px; font-size: 10px; }
+  .group { background: var(--w-surface); border: 1.2px solid var(--w-groupline); border-radius: 11px; padding: 0 6px 6px; display: flex; flex-direction: column; gap: 5px; }
+  .gh { display: flex; align-items: center; height: 30px; padding-left: 4px; font-weight: 600; }
+  .seg { display: inline-flex; background: var(--w-raised); border-radius: 6px; padding: 2px; gap: 2px; }
+  .seg span { padding: 2px 7px; border-radius: 4px; font-size: 9.5px; color: var(--w-fg2); }
+  .seg span.act { background: var(--acc); color: var(--on); }
+  .card { display: grid; grid-template-columns: 32px 1fr auto 64px; gap: 8px; align-items: center; padding: 7px 10px; border-radius: 9px; background: var(--w-raised); min-width: 0; }
+  .group .card { background: var(--w-hover); }
+  .name { font-weight: 600; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 5px; }
+  .name i { width: 5px; height: 5px; border-radius: 50%; background: var(--acc); flex: none; }
+  .desc { color: var(--w-muted); font-size: 9.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .keys { display: flex; gap: 3px; }
+  .k { min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 4px; display: inline-grid; place-items: center; font-weight: 600; font-size: 9px;
+       background: var(--w-key); border-bottom: 1.5px solid rgba(0,0,0,.35); }
+  .mode { color: var(--w-muted); font-size: 9.5px; text-align: right; }
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; padding: 0 10px; font-size: 9.5px; color: var(--w-fg2); background: var(--w-side); }
+  .status .r { margin-left: auto; color: var(--w-muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>MacroMaster: pick a background</h1>
+    <p>Reply with a letter, for example "C". All of these are softer than today's near-black, and the text is toned down a little too, so the contrast is gentler. The accent buttons on top are only for judging how each background works with different accents; you'll be able to pick the accent yourself in Settings.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Accent colour in the previews">
+    <span>Accent in the previews</span>
+    <button id="a-cream" data-acc="#ECE4D3" aria-pressed="true"><i style="background:#ECE4D3"></i>Cream (now)</button>
+    <button id="a-white" data-acc="#F4F4F5" aria-pressed="false"><i style="background:#F4F4F5"></i>White</button>
+    <button id="a-sage" data-acc="#B9D3B0" aria-pressed="false"><i style="background:#B9D3B0"></i>Sage</button>
+    <button id="a-lav" data-acc="#C9C3F0" aria-pressed="false"><i style="background:#C9C3F0"></i>Lavender</button>
+    <button id="a-peach" data-acc="#F2C6A8" aria-pressed="false"><i style="background:#F2C6A8"></i>Peach</button>
+    <button id="a-sky" data-acc="#AECDEB" aria-pressed="false"><i style="background:#AECDEB"></i>Sky</button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script>
+  // [label, name, note, palette]; palette: bg, side, surface (group), raised (cards), hover (cards in a group), line, groupline, key, fg, fg2, muted
+  var options = [
+    ["Now", "Near-black", "today: neutral, high contrast",
+      { bg: "#1C1C1F", side: "#18181B", surface: "#222226", raised: "#28282D", hover: "#303035", line: "#3A3A40", groupline: "#4A4A51", key: "#303035", fg: "#F4F4F5", fg2: "#B4B4BC", muted: "#85858F" }],
+    ["A", "Soft graphite", "neutral grey, one step lighter",
+      { bg: "#26262A", side: "#212124", surface: "#2C2C31", raised: "#333338", hover: "#3B3B41", line: "#46464D", groupline: "#55555C", key: "#3D3D43", fg: "#E9E8E6", fg2: "#B9B8B6", muted: "#8E8D8B" }],
+    ["B", "Warm charcoal", "a hint of brown, pairs with the cream accent",
+      { bg: "#262320", side: "#211F1C", surface: "#2D2A26", raised: "#34302C", hover: "#3C3833", line: "#4A4540", groupline: "#57514A", key: "#3E3A35", fg: "#EDE8E0", fg2: "#BDB6AB", muted: "#918A80" }],
+    ["C", "Slate", "a hint of blue-grey, cool and calm",
+      { bg: "#23262C", side: "#1F2227", surface: "#2A2E35", raised: "#31353D", hover: "#393E47", line: "#454A55", groupline: "#4F5561", key: "#3B4049", fg: "#E8EAEE", fg2: "#B5BAC3", muted: "#8A909B" }],
+    ["D", "Plum dusk", "a hint of violet-grey, very muted",
+      { bg: "#27232A", side: "#221F25", surface: "#2E2A32", raised: "#353039", hover: "#3D3842", line: "#4A4450", groupline: "#564E5B", key: "#3F3944", fg: "#ECE7EE", fg2: "#BCB4BF", muted: "#908894" }],
+    ["E", "Moss", "a hint of green-grey",
+      { bg: "#232621", side: "#1F221D", surface: "#2A2E28", raised: "#31352F", hover: "#393E36", line: "#454A42", groupline: "#4E5649", key: "#3B4038", fg: "#E8ECE5", fg2: "#B5BBB0", muted: "#8A9185" }],
+    ["F", "Mocha", "the lightest and warmest, most pastel",
+      { bg: "#2C2825", side: "#27231F", surface: "#34302C", raised: "#3B3632", hover: "#433E39", line: "#524C46", groupline: "#5E5750", key: "#46403A", fg: "#EFE9E1", fg2: "#C1B9AE", muted: "#968D82" }]
+  ];
+
+  function mock() {
+    return '<div class="win">' +
+      '<aside class="side"><div class="brand"><span class="logo">M</span>MacroMaster</div>' +
+      '<div class="eng"><span class="dot"></span><div class="grow"><div style="font-weight:600">Engine running</div><div class="s">Hotkeys are live</div></div><span class="sw"></span></div>' +
+      '<div class="lbl">PROFILES</div>' +
+      '<div class="prof sel"><div class="grow"><div>Destiny 2 Skate &amp; Tech</div><div class="c">4 macros</div></div><span class="sw"></span></div>' +
+      '<div class="prof"><div class="grow"><div>Utilities &amp; Hotkeys</div><div class="c">3 macros</div></div><span class="sw off"></span></div></aside>' +
+      '<main class="main"><div class="top"><div class="grow"><h3>Destiny 2 Skate &amp; Tech</h3><div class="sub">4 macros · 4 enabled</div></div><span class="btn">Import</span><span class="btn pri">+ New macro</span></div>' +
+      '<div class="search">Search macros</div>' +
+      '<div class="group"><div class="gh"><span class="grow">Destiny Skate Modes</span><span class="seg"><span>PgUp Wellskate</span><span class="act">PgDn Groundskate</span></span></div>' +
+      '<div class="card"><span class="sw"></span><div style="min-width:0"><div class="name">Wellskate (Heavy Weapon Skate)</div><div class="desc">Destiny 2 · destiny2.exe · Right click heavy cancel</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 11 steps</span></div>' +
+      '<div class="card"><span class="sw"></span><div style="min-width:0"><div class="name"><i></i>Groundskate (Flat Ground Skate)</div><div class="desc">Destiny 2 · destiny2.exe · Ground launch sequence</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 7 steps</span></div></div>' +
+      '<div class="card"><span class="sw"></span><div style="min-width:0"><div class="name">Rocket Recoil Pull-Down</div><div class="desc">Destiny 2 · destiny2.exe · Fires weapon, triggers ability</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 9 steps</span></div>' +
+      '</main><div class="status"><span class="dot"></span>Engine running<span class="r">2 profiles on · 7 macros live</span></div></div>';
+  }
+
+  var grid = document.getElementById("grid");
+  options.forEach(function (o) {
+    var p = o[3];
+    var card = document.createElement("section");
+    card.className = "opt";
+    card.innerHTML =
+      '<div class="tag"><b>' + o[0] + '</b>' + o[1] + (o[0] === "Now" ? ' <span class="now">now</span>' : '') + '<span>' + o[2] + '</span></div>' +
+      '<div class="scroll">' + mock() + '</div>' +
+      '<div class="chips"><span><i style="background:' + p.bg + '"></i>window ' + p.bg + '</span><span><i style="background:' + p.raised + '"></i>cards ' + p.raised + '</span><span><i style="background:' + p.fg + '"></i>text ' + p.fg + '</span></div>';
+    var win = card.querySelector(".win");
+    Object.keys(p).forEach(function (k) { win.style.setProperty("--w-" + k, p[k]); });
+    grid.appendChild(card);
+  });
+
+  function setAccent(hex) {
+    var r = parseInt(hex.substr(1, 2), 16), g = parseInt(hex.substr(3, 2), 16), b = parseInt(hex.substr(5, 2), 16);
+    var lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    document.documentElement.style.setProperty("--acc", hex);
+    document.documentElement.style.setProperty("--on", lum > 0.55 ? "#151517" : "#F4F4F5");
+  }
+  setAccent("#ECE4D3");
+  var buttons = document.querySelectorAll(".controls button");
+  buttons.forEach(function (b) {
+    b.addEventListener("click", function () {
+      setAccent(b.dataset.acc);
+      buttons.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+    });
+  });
+</script>

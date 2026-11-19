@@ -76,6 +76,9 @@ public class AppSettings
     /// </summary>
     public int UiScalePercent { get; set; } = 0;
 
+    /// <summary>The one accent colour (switches, main buttons, active mode), "#RRGGBB". See UI.AccentTheme.</summary>
+    public string AccentColor { get; set; } = "#ECE4D3";
+
     // Window & System
     public bool StartWithWindows { get; set; } = false;
 

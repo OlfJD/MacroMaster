@@ -40,7 +40,9 @@ public partial class MainWindow : Window
         InitializeComponent();
         WindowHelper.Attach(this, RootGrid);
         // Needed before the window first appears (settings are fully loaded later, in Loaded)
-        UiScale.Preference = MacroJsonSerializer.LoadSettings(_settingsFilePath).UiScalePercent;
+        var early = MacroJsonSerializer.LoadSettings(_settingsFilePath);
+        UiScale.Preference = early.UiScalePercent;
+        AccentTheme.Apply(early.AccentColor);
         SourceInitialized += (_, _) => InitUiScale();
         StateChanged += (_, _) => MaximizeIcon.IconKey = WindowState == WindowState.Maximized ? "restore" : "maximize";
 
@@ -292,8 +294,9 @@ public partial class MainWindow : Window
         WindowHelper.ForceToFront(this);
     }
 
-    private void Notify(string title, string subtitle, string icon, string color = "#ECE4D3", int durationMs = 2200)
+    private void Notify(string title, string subtitle, string icon, string? color = null, int durationMs = 2200)
     {
+        color ??= AccentTheme.Current;
         _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs, _engine.Settings.OverlayCustomSpot);
     }
 
@@ -1194,7 +1197,7 @@ public partial class MainWindow : Window
         page.RestartAsAdminRequested += RestartAsAdministrator;
         page.ModeIndicatorPreviewRequested += PreviewModeIndicator;
         page.NotificationPreviewRequested += (position, spot) =>
-            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", "#ECE4D3",
+            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", AccentTheme.Current,
                                           position, Math.Max(2500, _engine.Settings.HudDurationMs), spot);
         bool wasAutostart = _engine.Settings.StartWithWindows, wasAdmin = _engine.Settings.StartAsAdmin;
         page.Finished += saved =>

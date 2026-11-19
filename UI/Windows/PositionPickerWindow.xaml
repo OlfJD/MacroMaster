@@ -18,9 +18,9 @@
         TextOptions.TextFormattingMode="{DynamicResource UiTextFormattingMode}"
         Cursor="SizeAll">
 
-    <controls:SmoothBorder x:Name="Frame" BorderBrush="{StaticResource AccentBrush}" BorderThickness="2" Padding="14,10,16,10">
+    <controls:SmoothBorder x:Name="Frame" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2" Padding="14,10,16,10">
         <StackPanel Orientation="Horizontal">
-            <controls:AppIcon x:Name="SampleIcon" IconKey="crosshair" Size="16" Foreground="{StaticResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+            <controls:AppIcon x:Name="SampleIcon" IconKey="crosshair" Size="16" Foreground="{DynamicResource AccentTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
             <StackPanel VerticalAlignment="Center">
                 <TextBlock x:Name="SampleText" Text="Notifications show up here" FontSize="13" FontWeight="SemiBold"/>
                 <TextBlock Text="Drag me where you want me · Enter to keep · Esc to cancel" FontSize="11" Foreground="{StaticResource TextSecondaryBrush}" Margin="0,2,0,0"/>

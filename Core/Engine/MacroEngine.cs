@@ -12,7 +12,8 @@ public class MacroEngine : IDisposable
     private const string Muted = "#A3A6B1";
     private const string Danger = "#F2555A";
     private const string Warning = "#F5B547";
-    private const string Accent = "#ECE4D3"; // the app's cream accent
+    /// <summary>The accent picked in Settings, so popups match the app.</summary>
+    private string Accent => string.IsNullOrWhiteSpace(Settings.AccentColor) ? "#ECE4D3" : Settings.AccentColor;
 
     private readonly LowLevelKeyboardHook _keyboardHook = new();
     private readonly LowLevelMouseHook _mouseHook = new();
