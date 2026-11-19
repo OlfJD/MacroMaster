@@ -292,7 +292,7 @@ public partial class MainWindow : Window
         WindowHelper.ForceToFront(this);
     }
 
-    private void Notify(string title, string subtitle, string icon, string color = "#7C83FF", int durationMs = 2200)
+    private void Notify(string title, string subtitle, string icon, string color = "#E4E4E7", int durationMs = 2200)
     {
         _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs, _engine.Settings.OverlayCustomSpot);
     }
@@ -366,8 +366,8 @@ public partial class MainWindow : Window
         EngineTitle.Text = on ? "Engine running" : "Engine off";
         EngineSubtitle.Text = on ? "Hotkeys are live" : "All hotkeys ignored";
         EngineDot.Fill = Res(on ? "SuccessBrush" : "TextMutedBrush");
-        EngineCard.Background = Res(on ? "SuccessSubtleBrush" : "SurfaceBrush");
-        EngineCard.BorderBrush = Res(on ? "SuccessBorderBrush" : "BorderBrush");
+        // Off: the tile sinks back into the sidebar; the dot (green / grey) carries the state
+        EngineCard.Background = Res(on ? "RaisedBrush" : "SurfaceBrush");
 
         StatusDot.Fill = Res(on ? "SuccessBrush" : "TextMutedBrush");
         StatusEngineText.Text = on ? "Engine running" : "Engine off";
@@ -632,6 +632,21 @@ public partial class MainWindow : Window
         {
             Dispatcher.BeginInvoke(() => { _macroView?.Refresh(); UpdateEmptyState(); });
         }
+    }
+
+    /// <summary>A mode group's switch: clicking a mode makes it the active one, like pressing its switch key.</summary>
+    private void ModeSegment_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MacroDefinition mode } || !mode.RequiresArming || mode.IsCurrentlyArmed) return;
+        if (_engine.SelectedProfile is not { } profile || !profile.Macros.Contains(mode)) return;
+
+        foreach (var m in profile.Macros.Where(m => m.RequiresArming && m.ModeGroupKey == mode.ModeGroupKey))
+        {
+            m.IsCurrentlyArmed = m == mode;
+        }
+        SaveState();
+        _engine.RefreshModeIndicator();
+        SyncUiStates(); // re-renders the rows: the active state isn't a notifying property
     }
 
     private void MacrosListBox_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -988,7 +1003,7 @@ public partial class MainWindow : Window
         {
             SaveState();
             RefreshMacrosList();
-            Notify($"Imported {count} macro{(count == 1 ? "" : "s")}", "Converted from AutoHotkey", "logo", "#7C83FF", 2500);
+            Notify($"Imported {count} macro{(count == 1 ? "" : "s")}", "Converted from AutoHotkey", "logo", durationMs: 2500);
         }
         return count;
     }
@@ -1179,7 +1194,7 @@ public partial class MainWindow : Window
         page.RestartAsAdminRequested += RestartAsAdministrator;
         page.ModeIndicatorPreviewRequested += PreviewModeIndicator;
         page.NotificationPreviewRequested += (position, spot) =>
-            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", "#7C83FF",
+            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", "#E4E4E7",
                                           position, Math.Max(2500, _engine.Settings.HudDurationMs), spot);
         bool wasAutostart = _engine.Settings.StartWithWindows, wasAdmin = _engine.Settings.StartAsAdmin;
         page.Finished += saved =>

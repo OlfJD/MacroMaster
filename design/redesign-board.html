@@ -1,0 +1,402 @@
+<title>MacroMaster Redesign Board</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+  /* Layout: one stacked column of full-width window mock-ups (A-E), with two switchers on top
+     that restyle every mock except the "now" one: accent colour (1-5) and font. */
+  :root {
+    --bg: #f2f2f4; --surface: #ffffff; --fg: #18181b; --muted: #5f6068; --line: #dcdce1; --accent: #18181b;
+    --ui: "Inter", "Segoe UI", system-ui, sans-serif; --head: "Space Grotesk", "Inter", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --bg: #111113; --surface: #1a1a1d; --fg: #f1f1f3; --muted: #9a9aa3; --line: #2b2b30; --accent: #f1f1f3; color-scheme: dark } }
+  :root[data-theme="dark"] { --bg: #111113; --surface: #1a1a1d; --fg: #f1f1f3; --muted: #9a9aa3; --line: #2b2b30; --accent: #f1f1f3; color-scheme: dark }
+
+  body { background: var(--bg); color: var(--fg); font-family: var(--ui); font-size: 15px; line-height: 1.5;
+         padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .wrap { max-width: 940px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+  h1 { font-family: var(--head); font-size: 28px; margin: 0 0 6px; text-wrap: balance; }
+  h2 { font-family: var(--head); font-size: 20px; margin: 0; text-wrap: balance; }
+  p { margin: 0; color: var(--muted); max-width: 68ch; }
+  header { display: flex; flex-direction: column; gap: 6px; }
+  section { display: flex; flex-direction: column; gap: 14px; }
+  .opt { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .tag { display: flex; align-items: baseline; gap: 10px; font-weight: 600; flex-wrap: wrap; }
+  .tag b { font-family: var(--head); font-size: 20px; }
+  .tag span { color: var(--muted); font-weight: 400; font-size: 14px; }
+  .now { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; border: 1px solid currentColor; border-radius: 4px; padding: 0 6px; align-self: center; }
+  .scroll { overflow-x: auto; border-radius: 12px; }
+
+  .controls { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px;
+              display: flex; flex-wrap: wrap; gap: 10px 28px; align-items: center; border-bottom: 1px solid var(--line); }
+  .group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .group > span { color: var(--muted); font-size: 13px; margin-right: 4px; }
+  .group button { font: 500 13px var(--ui); color: var(--fg); background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+                  padding: 5px 12px 5px 8px; display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+  .group button i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid rgba(127,127,127,.5); }
+  .group button[aria-pressed="true"] { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+  .group button:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+  .group button b { font-family: var(--head); }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+
+  /* ============ Window mock-ups: these imitate the app, so their colours are fixed ============ */
+  .win { width: 900px; height: 470px; display: grid; grid-template-columns: 228px 1fr; grid-template-rows: 1fr 30px;
+         border-radius: 12px; overflow: hidden; font-family: var(--mf); font-size: 13px; line-height: 1.35;
+         background: var(--m-bg); color: var(--m-fg); border: 1px solid var(--m-frame); }
+  .win svg { width: 16px; height: 16px; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .side { background: var(--m-side); border-right: 1px solid var(--m-sideline); padding: 14px 12px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 14px; padding: 2px 4px; }
+  .logo { width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center; font-weight: 700; font-size: 12px; background: var(--m-logo); color: var(--m-logofg); }
+  .eng { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--m-r); background: var(--m-raise); border: var(--m-ow) solid var(--m-outline); }
+  .eng .t { font-weight: 600; }
+  .eng .s { color: var(--m-muted); font-size: 12px; }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: #3DD68C; flex: none; }
+  .lbl { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--m-muted); padding: 0 4px; display: flex; justify-content: space-between; align-items: center; }
+  .prof { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: calc(var(--m-r) - 2px); border: var(--m-ow) solid transparent; }
+  .prof.sel { background: var(--m-raise); border-color: var(--m-outline); }
+  .prof .n { flex: 1; min-width: 0; }
+  .prof .c { color: var(--m-muted); font-size: 12px; }
+  .prof.off .n > div:first-child { color: var(--m-muted); }
+  .grow { flex: 1; }
+  .setb { display: flex; align-items: center; gap: 10px; padding: 8px 10px; color: var(--m-fg2); }
+
+  .main { padding: 20px 24px 14px; display: flex; flex-direction: column; gap: 14px; min-width: 0; overflow: hidden; }
+  .top { display: flex; align-items: center; gap: 12px; }
+  .top h3 { margin: 0; font-size: 21px; font-weight: 650; letter-spacing: -.01em; }
+  .top .sub { color: var(--m-muted); font-size: 12px; margin-top: 2px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 13px; border-radius: calc(var(--m-r) - 3px); font-weight: 600; font-size: 13px;
+         background: var(--m-raise); border: var(--m-ow) solid var(--m-outline2); color: var(--m-fg); }
+  .btn.pri { background: var(--acc); color: var(--acc-fg); border-color: var(--acc-border, var(--acc)); }
+  .search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 12px; width: 240px; border-radius: calc(var(--m-r) - 3px);
+            background: var(--m-raise); border: var(--m-ow) solid var(--m-outline2); color: var(--m-muted); }
+
+  .sw { width: 34px; height: 20px; border-radius: 10px; background: var(--m-off); position: relative; flex: none; border: var(--m-ow) solid var(--m-swline); box-sizing: border-box; }
+  .sw::after { content: ""; position: absolute; top: 50%; left: 3px; width: 12px; height: 12px; border-radius: 50%; transform: translateY(-50%); background: var(--m-offknob); }
+  .sw.on { background: var(--acc); border-color: var(--acc-border, var(--acc)); }
+  .sw.on::after { left: auto; right: 3px; background: var(--acc-fg); }
+
+  .keys { display: flex; gap: 4px; flex-wrap: wrap; }
+  .k { min-width: 22px; height: 22px; padding: 0 6px; box-sizing: border-box; border-radius: 5px; display: inline-grid; place-items: center;
+       font-weight: 600; font-size: 11.5px; background: var(--m-key); color: var(--m-fg); border: var(--m-keyb) solid var(--m-keyline); border-bottom-width: var(--m-keybb); }
+  .pill { font-size: 11.5px; color: var(--m-fg2); background: var(--m-pill); border-radius: 5px; padding: 2px 7px; white-space: nowrap; }
+  .muted { color: var(--m-muted); }
+  .mtag { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 5px; background: var(--m-pill); color: var(--m-fg2); white-space: nowrap; }
+  .mtag.act { background: var(--acc-soft); color: var(--acc-text); }
+  .mtag.act::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .name { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .desc { color: var(--m-muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .status { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 0 16px; font-size: 12px; color: var(--m-fg2);
+            background: var(--m-side); border-top: 1px solid var(--m-sideline); }
+  .status .r { margin-left: auto; color: var(--m-muted); }
+  .status .k { height: 18px; min-width: 18px; font-size: 10.5px; }
+
+  /* ---- A: today's design (fixed: violet, Segoe UI) ---- */
+  .now-win { --mf: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+             --m-bg: #16171c; --m-side: #1a1b21; --m-sideline: #26272e; --m-frame: #2a2c35; --m-raise: #20212a; --m-fg: #ecedf2; --m-fg2: #c3c5cf; --m-muted: #8d909c;
+             --m-r: 9px; --m-ow: 1px; --m-outline: #2a2c35; --m-outline2: #34363f; --m-off: #2c2d35; --m-offknob: #8d909c; --m-swline: transparent;
+             --m-key: #1f2028; --m-keyline: #3a3c46; --m-keyb: 1px; --m-keybb: 2px; --m-pill: #262731; --m-logo: #7C83FF; --m-logofg: #fff;
+             --acc: #7C83FF; --acc-fg: #111; --acc-soft: rgba(245,181,71,.14); --acc-text: #F5B547; }
+  .now-win .eng { background: #16261e; border-color: #2a5a40; }
+  .now-win .prof.sel { background: #23242c; border-color: transparent; }
+  .now-win .btn.pri { color: #fff; }
+  .now-win .sw.on::after { background: #14151a; }
+  .table { flex: 1; border: 1px solid #2a2c35; border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+  .thead, .trow { display: grid; grid-template-columns: 52px 1fr 128px 80px 44px; align-items: center; padding: 0 14px; }
+  .thead { height: 32px; border-bottom: 1px solid #2a2c35; font-size: 10.5px; letter-spacing: .07em; color: #8d909c; }
+  .trow { height: 52px; border-bottom: 1px solid #22232b; }
+  .trow .cat { color: #9aa0ff; font-size: 12px; }
+  .grp { margin: 6px 6px 4px; border: 1px solid #34363f; border-radius: 9px; background: #1a1b21; }
+  .grp .gh { display: flex; align-items: center; gap: 8px; padding: 8px 14px 4px 66px; font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px 2px 3px; border-radius: 6px; border: 1px solid #34363f; background: #20212a; font-size: 11.5px; font-weight: 500; }
+  .chip.act { border-color: #F5B547; background: rgba(245,181,71,.12); color: #F5B547; }
+  .chip .k { height: 18px; font-size: 10.5px; }
+  .now-win .mtag.act { background: rgba(245,181,71,.14); color: #F5B547; }
+
+  /* ---- Shared look for B-E: Sound Switch's neutral palette ---- */
+  .mono-dark { --m-bg: #1c1c1f; --m-side: #18181b; --m-sideline: #ffffff0d; --m-frame: #ffffff14; --m-raise: #26262a; --m-raise2: #2e2e33;
+               --m-fg: #f4f4f5; --m-fg2: #c9c9cf; --m-muted: #8f8f98; --m-r: 12px; --m-ow: 0px; --m-outline: transparent; --m-outline2: #ffffff1f;
+               --m-off: #3a3a40; --m-offknob: #8f8f98; --m-swline: transparent; --m-key: #2e2e33; --m-keyline: #111113; --m-keyb: 0px; --m-keybb: 2px;
+               --m-pill: #2e2e33; --m-logo: #f4f4f5; --m-logofg: #111113; --m-ring: #f4f4f5; }
+  .armour { --m-bg: #ffffff; --m-side: #ffffff; --m-sideline: #000; --m-frame: #000; --m-raise: #e8eaed; --m-raise2: #dadce0;
+            --m-fg: #000000; --m-fg2: #202124; --m-muted: #5f6368; --m-r: 12px; --m-ow: 2px; --m-outline: #000; --m-outline2: #000;
+            --m-off: #ffffff; --m-offknob: #000; --m-swline: #000; --m-key: #ffffff; --m-keyline: #000; --m-keyb: 1.5px; --m-keybb: 1.5px;
+            --m-pill: #e8eaed; --m-logo: #000; --m-logofg: #fff; --m-ring: #000; border-width: 2px; }
+  .armour .side { border-right-width: 2px; }
+  .armour .status { border-top-width: 2px; }
+
+  /* B: same layout as today, Sound Switch colours, no table lines */
+  .panel { flex: 1; background: #222226; border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 2px; overflow: hidden; }
+  .lrow { display: grid; grid-template-columns: 46px 1fr 120px 74px 40px; align-items: center; padding: 0 12px; height: 50px; border-radius: 10px; }
+  .lrow.hover { background: #2a2a2f; }
+  .lgrp { background: #1c1c1f; border-radius: 11px; padding: 4px 0 2px; margin-bottom: 4px; }
+  .lgrp .gh { display: flex; align-items: center; gap: 8px; padding: 6px 12px 4px 58px; font-weight: 600; }
+  .seg { display: inline-flex; background: var(--m-raise); border-radius: 8px; padding: 2px; gap: 2px; border: var(--m-ow) solid var(--m-outline); }
+  .seg > span { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 4px; border-radius: 6px; font-size: 12px; font-weight: 500; color: var(--m-fg2); }
+  .seg > span.act { background: var(--acc); color: var(--acc-fg); }
+  .seg .k { height: 18px; font-size: 10.5px; }
+  .seg > span.act .k { background: transparent; color: inherit; border-color: currentColor; border-width: 1px; border-bottom-width: 1px; }
+
+  /* C: tiles */
+  .sect { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: var(--m-muted); display: flex; gap: 8px; align-items: center; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .tile { background: var(--m-raise); border-radius: 14px; padding: 12px 13px; display: flex; flex-direction: column; gap: 9px; position: relative;
+          border: var(--tile-bw, 1.5px) solid var(--tile-line, transparent); min-width: 0; }
+  .tile.act { --tile-line: var(--m-ring); }
+  .tile .tt { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .badge { width: 20px; height: 20px; border-radius: 50%; background: var(--acc); color: var(--acc-fg); display: grid; place-items: center; }
+  .badge svg { width: 12px; height: 12px; stroke-width: 3; }
+  .tile .meta { display: flex; align-items: center; gap: 6px; color: var(--m-muted); font-size: 12px; }
+
+  /* D / E: each macro its own rounded card */
+  .cards { display: flex; flex-direction: column; gap: 8px; flex: 1; overflow: hidden; }
+  .card { display: grid; grid-template-columns: 40px 1fr auto 74px; gap: 12px; align-items: center; padding: 10px 14px; border-radius: var(--m-r);
+          background: var(--m-raise); border: var(--m-ow) solid var(--m-outline); }
+  .card .k { height: 24px; min-width: 24px; font-size: 12px; }
+  .card .mode { color: var(--m-muted); font-size: 12px; text-align: right; }
+  .gcard { border-radius: var(--m-r); border: var(--m-ow) solid var(--m-outline); background: var(--m-gbg, #222226); padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .armour .gcard { --m-gbg: #ffffff; }
+  .gcard .gh { display: flex; align-items: center; gap: 10px; padding: 0 4px; }
+  .gcard .gh .gt { font-weight: 600; flex: 1; }
+  .gcard .card { background: var(--m-raise2); }
+  .armour .gcard .card { background: var(--m-raise); }
+  .armour .card.act { background: #000; color: #fff; }
+  .armour .card.act .muted, .armour .card.act .desc, .armour .card.act .mode { color: #bdc1c6; }
+  .armour .card.act .k { background: #000; color: #fff; border-color: #fff; }
+  .armour .card.act .sw.on { border-color: #fff; }
+  .mono-dark .card.act { box-shadow: inset 0 0 0 1.5px var(--m-ring); }
+  .armour .seg > span.act .k { border-color: currentColor; }
+  .armour .search, .armour .btn { border-width: 2px; }
+  .armour .eng { background: #fff; }
+
+  /* Accent switcher (not on A) */
+  body[data-acc="mono"] .acc-win.mono-dark { --acc: #f4f4f5; --acc-fg: #111113; --acc-soft: #ffffff1a; --acc-text: #f4f4f5; }
+  body[data-acc="mono"] .acc-win.armour { --acc: #000; --acc-fg: #fff; --acc-soft: #000; --acc-text: #fff; }
+  body[data-acc="violet"] .acc-win { --acc: #7C83FF; --acc-fg: #fff; --acc-soft: rgba(124,131,255,.18); --acc-text: #a5aaff; }
+  body[data-acc="blue"] .acc-win { --acc: #4A8CFF; --acc-fg: #fff; --acc-soft: rgba(74,140,255,.18); --acc-text: #8db6ff; }
+  body[data-acc="green"] .acc-win { --acc: #34C77B; --acc-fg: #062312; --acc-soft: rgba(52,199,123,.16); --acc-text: #5fdc9a; }
+  body[data-acc="amber"] .acc-win { --acc: #F2B33D; --acc-fg: #241800; --acc-soft: rgba(242,179,61,.16); --acc-text: #f5c66b; }
+  body[data-acc="violet"] .acc-win.armour { --acc-text: #3d44c9; --acc-soft: rgba(124,131,255,.2); --acc-border: #000; }
+  body[data-acc="blue"] .acc-win.armour { --acc-text: #1a56c4; --acc-border: #000; }
+  body[data-acc="green"] .acc-win.armour { --acc-text: #137a43; --acc-border: #000; }
+  body[data-acc="amber"] .acc-win.armour { --acc-text: #8a5a00; --acc-border: #000; }
+  body[data-font="inter"] .acc-win { --mf: "Inter", "Segoe UI", system-ui, sans-serif; }
+  body[data-font="segoe"] .acc-win { --mf: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-dl" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 0 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 0 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></symbol>
+  <symbol id="i-pad" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3"/><circle cx="16" cy="12" r=".6"/><circle cx="18" cy="14" r=".6"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></symbol>
+  <symbol id="i-cube" viewBox="0 0 24 24"><path d="M12 2 3 7v10l9 5 9-5V7z"/><path d="M3 7l9 5 9-5M12 12v10"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
+</svg>
+
+<div class="wrap">
+  <header>
+    <h1>MacroMaster: pick a look</h1>
+    <p>Reply with a letter for the layout and a number for the accent, for example "D, 1, Inter". Every mock-up is your Destiny profile. The two switchers restyle B to E at once; A always shows today's design.</p>
+  </header>
+
+  <div class="controls">
+    <div class="group" role="group" aria-label="Accent colour">
+      <span>Accent</span>
+      <button id="acc-mono" data-acc="mono" aria-pressed="true"><i style="background:linear-gradient(90deg,#f4f4f5 50%,#111113 50%)"></i><b>1</b> Mono (Sound Switch)</button>
+      <button id="acc-violet" data-acc="violet" aria-pressed="false"><i style="background:#7C83FF"></i><b>2</b> Violet (now)</button>
+      <button id="acc-blue" data-acc="blue" aria-pressed="false"><i style="background:#4A8CFF"></i><b>3</b> Blue</button>
+      <button id="acc-green" data-acc="green" aria-pressed="false"><i style="background:#34C77B"></i><b>4</b> Green</button>
+      <button id="acc-amber" data-acc="amber" aria-pressed="false"><i style="background:#F2B33D"></i><b>5</b> Amber</button>
+    </div>
+    <div class="group" role="group" aria-label="Font">
+      <span>Font</span>
+      <button id="font-inter" data-font="inter" aria-pressed="true">Inter (Sound Switch)</button>
+      <button id="font-segoe" data-font="segoe" aria-pressed="false">Segoe UI (now)</button>
+    </div>
+  </div>
+
+  <!-- ================= A: now ================= -->
+  <section class="opt">
+    <div class="tag"><b>A</b>Today's design <span class="now">now</span><span>violet on every switch and button, table with column headers and lines</span></div>
+    <div class="scroll"><div class="win now-win">
+      <aside class="side">
+        <div class="brand"><span class="logo">M</span>MacroMaster</div>
+        <div class="eng"><span class="dot"></span><div class="grow"><div class="t">Engine running</div><div class="s">Hotkeys are live</div></div><span class="sw on"></span></div>
+        <div class="lbl">Profiles <svg><use href="#i-plus"/></svg></div>
+        <div class="prof sel"><svg><use href="#i-pad"/></svg><div class="n"><div>Destiny 2 Skate &amp; Tech</div><div class="c">4 macros</div></div><span class="sw on"></span></div>
+        <div class="prof"><svg><use href="#i-cube"/></svg><div class="n"><div>Minecraft</div><div class="c">5 macros</div></div><span class="sw on"></span></div>
+        <div class="prof off"><svg><use href="#i-zap"/></svg><div class="n"><div>Utilities &amp; Hotkeys</div><div class="c">3 macros</div></div><span class="sw"></span></div>
+        <div class="grow"></div>
+        <div class="setb"><svg><use href="#i-gear"/></svg>Settings</div>
+      </aside>
+      <main class="main">
+        <div class="top"><div class="grow"><h3>Destiny 2 Skate &amp; Tech</h3><div class="sub">4 macros · 4 enabled</div></div>
+          <span class="btn"><svg><use href="#i-dl"/></svg>Import</span><span class="btn pri"><svg><use href="#i-plus"/></svg>New macro</span></div>
+        <div class="search"><svg><use href="#i-search"/></svg>Search macros</div>
+        <div class="table">
+          <div class="thead"><span></span><span>MACRO</span><span>TRIGGER</span><span>MODE</span><span>STEPS</span></div>
+          <div class="grp">
+            <div class="gh">Destiny Skate Modes <span class="pill">2 modes</span><span class="grow"></span><span class="muted" style="font-weight:400;font-size:12px">Switch with</span>
+              <span class="chip act"><span class="k">PgUp</span>Wellskate</span><span class="chip"><span class="k">PgDn</span>Groundskate</span></div>
+            <div class="trow" style="border:0"><span class="sw on"></span><div style="min-width:0"><div class="name">Wellskate <span class="mtag act">Active mode</span></div><div class="cat">Destiny 2</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="pill" style="width:fit-content">Once</span><span>11</span></div>
+            <div class="trow" style="border:0"><span class="sw on"></span><div style="min-width:0"><div class="name">Groundskate <span class="mtag">Press PgDn to use</span></div><div class="cat">Destiny 2</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="pill" style="width:fit-content">Once</span><span>7</span></div>
+          </div>
+          <div class="trow"><span class="sw on"></span><div style="min-width:0"><div class="name">Rocket Recoil Pull-Down</div><div class="cat">Destiny 2 <span class="muted">· destiny2.exe</span></div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="pill" style="width:fit-content">Once</span><span>9</span></div>
+          <div class="trow"><span class="sw on"></span><div style="min-width:0"><div class="name">Fast V + Escape</div><div class="cat">Destiny 2 <span class="muted">· destiny2.exe</span></div></div><span class="keys"><span class="k">End</span></span><span class="pill" style="width:fit-content">Once</span><span>3</span></div>
+        </div>
+      </main>
+      <div class="status"><span class="dot"></span>Engine running<span class="muted">|</span><svg style="width:13px;height:13px"><use href="#i-power"/></svg>Stop everything<span class="k">F12</span><span class="r">2 profiles on · 9 macros live</span></div>
+    </div></div>
+  </section>
+
+  <!-- ================= B: mono list ================= -->
+  <section class="opt">
+    <div class="tag"><b>B</b>Same layout, Sound Switch colours <span>the smallest change: neutral greys, one accent, no table lines</span></div>
+    <div class="scroll"><div class="win mono-dark acc-win">
+      <aside class="side">
+        <div class="brand"><span class="logo">M</span>MacroMaster</div>
+        <div class="eng"><span class="dot"></span><div class="grow"><div class="t">Engine running</div><div class="s">Hotkeys are live</div></div><span class="sw on"></span></div>
+        <div class="lbl">Profiles <svg><use href="#i-plus"/></svg></div>
+        <div class="prof sel"><svg><use href="#i-pad"/></svg><div class="n"><div>Destiny 2 Skate &amp; Tech</div><div class="c">4 macros</div></div><span class="sw on"></span></div>
+        <div class="prof"><svg><use href="#i-cube"/></svg><div class="n"><div>Minecraft</div><div class="c">5 macros</div></div><span class="sw on"></span></div>
+        <div class="prof off"><svg><use href="#i-zap"/></svg><div class="n"><div>Utilities &amp; Hotkeys</div><div class="c">3 macros</div></div><span class="sw"></span></div>
+        <div class="grow"></div>
+        <div class="setb"><svg><use href="#i-gear"/></svg>Settings</div>
+      </aside>
+      <main class="main">
+        <div class="top"><div class="grow"><h3>Destiny 2 Skate &amp; Tech</h3><div class="sub">4 macros · 4 enabled</div></div>
+          <span class="btn"><svg><use href="#i-dl"/></svg>Import</span><span class="btn pri"><svg><use href="#i-plus"/></svg>New macro</span></div>
+        <div class="search"><svg><use href="#i-search"/></svg>Search macros</div>
+        <div class="panel">
+          <div class="lgrp">
+            <div class="gh">Destiny Skate Modes<span class="grow"></span><span class="seg"><span class="act"><span class="k">PgUp</span>Wellskate</span><span><span class="k">PgDn</span>Groundskate</span></span></div>
+            <div class="lrow hover"><span class="sw on"></span><div style="min-width:0"><div class="name">Wellskate <span class="mtag act">Active</span></div><div class="desc">Heavy cancel into jump and Well of Radiance glide</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="muted">Once</span><span class="muted">11</span></div>
+            <div class="lrow"><span class="sw on"></span><div style="min-width:0"><div class="name">Groundskate</div><div class="desc">Jump, light attack, jump, super cancel</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="muted">Once</span><span class="muted">7</span></div>
+          </div>
+          <div class="lrow"><span class="sw on"></span><div style="min-width:0"><div class="name">Rocket Recoil Pull-Down</div><div class="desc">Fires, ability, 26 px recoil pull</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="muted">Once</span><span class="muted">9</span></div>
+          <div class="lrow"><span class="sw on"></span><div style="min-width:0"><div class="name">Fast V + Escape</div><div class="desc">V, then Escape after 50 ms</div></div><span class="keys"><span class="k">End</span></span><span class="muted">Once</span><span class="muted">3</span></div>
+        </div>
+      </main>
+      <div class="status"><span class="dot"></span>Engine running<span class="muted">·</span>Stop everything<span class="k">F12</span><span class="r">2 profiles on · 9 macros live</span></div>
+    </div></div>
+  </section>
+
+  <!-- ================= C: tiles ================= -->
+  <section class="opt">
+    <div class="tag"><b>C</b>Tiles, like Sound Switch's device tiles <span>modes are picked like an output device; fewer macros fit on screen</span></div>
+    <div class="scroll"><div class="win mono-dark acc-win">
+      <aside class="side">
+        <div class="brand"><span class="logo">M</span>MacroMaster</div>
+        <div class="eng"><span class="dot"></span><div class="grow"><div class="t">Engine running</div><div class="s">Hotkeys are live</div></div><span class="sw on"></span></div>
+        <div class="lbl">Profiles <svg><use href="#i-plus"/></svg></div>
+        <div class="prof sel"><svg><use href="#i-pad"/></svg><div class="n"><div>Destiny 2 Skate &amp; Tech</div><div class="c">4 macros</div></div><span class="sw on"></span></div>
+        <div class="prof"><svg><use href="#i-cube"/></svg><div class="n"><div>Minecraft</div><div class="c">5 macros</div></div><span class="sw on"></span></div>
+        <div class="prof off"><svg><use href="#i-zap"/></svg><div class="n"><div>Utilities &amp; Hotkeys</div><div class="c">3 macros</div></div><span class="sw"></span></div>
+        <div class="grow"></div>
+        <div class="setb"><svg><use href="#i-gear"/></svg>Settings</div>
+      </aside>
+      <main class="main">
+        <div class="top"><div class="grow"><h3>Destiny 2 Skate &amp; Tech</h3><div class="sub">4 macros · 4 enabled</div></div>
+          <span class="search" style="width:190px"><svg><use href="#i-search"/></svg>Search</span>
+          <span class="btn pri"><svg><use href="#i-plus"/></svg>New macro</span></div>
+        <div class="sect">Destiny Skate Modes <span style="text-transform:none;letter-spacing:0" class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span> picks one</div>
+        <div class="tiles" style="grid-template-columns:1fr 1fr">
+          <div class="tile act"><div class="tt"><span class="keys"><span class="k">PgUp</span></span><span class="badge"><svg><use href="#i-check"/></svg></span></div>
+            <div><div class="name" style="font-size:15px">Wellskate</div><div class="desc">Heavy cancel into jump and Well glide</div></div><div class="meta">Once · 11 steps</div></div>
+          <div class="tile"><div class="tt"><span class="keys"><span class="k">PgDn</span></span><span class="sw on"></span></div>
+            <div><div class="name" style="font-size:15px">Groundskate</div><div class="desc">Jump, light attack, jump, super cancel</div></div><div class="meta">Once · 7 steps</div></div>
+        </div>
+        <div class="sect">Other macros</div>
+        <div class="tiles">
+          <div class="tile"><div class="tt"><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="sw on"></span></div><div class="name">Rocket Recoil Pull-Down</div><div class="meta">Once · 9 steps</div></div>
+          <div class="tile"><div class="tt"><span class="keys"><span class="k">End</span></span><span class="sw on"></span></div><div class="name">Fast V + Escape</div><div class="meta">Once · 3 steps</div></div>
+          <div class="tile" style="border:1.5px dashed #ffffff26;background:transparent;justify-content:center;align-items:center;color:#8f8f98"><svg><use href="#i-plus"/></svg>New macro</div>
+        </div>
+      </main>
+      <div class="status"><span class="dot"></span>Engine running<span class="muted">·</span>Stop everything<span class="k">F12</span><span class="r">2 profiles on · 9 macros live</span></div>
+    </div></div>
+  </section>
+
+  <!-- ================= D: card rows ================= -->
+  <section class="opt">
+    <div class="tag"><b>D</b>Card rows <span>each macro its own rounded card, hotkey big on the right, modes switched with a segmented control</span></div>
+    <div class="scroll"><div class="win mono-dark acc-win">
+      <aside class="side">
+        <div class="brand"><span class="logo">M</span>MacroMaster</div>
+        <div class="eng"><span class="dot"></span><div class="grow"><div class="t">Engine running</div><div class="s">Hotkeys are live</div></div><span class="sw on"></span></div>
+        <div class="lbl">Profiles <svg><use href="#i-plus"/></svg></div>
+        <div class="prof sel"><svg><use href="#i-pad"/></svg><div class="n"><div>Destiny 2 Skate &amp; Tech</div><div class="c">4 macros</div></div><span class="sw on"></span></div>
+        <div class="prof"><svg><use href="#i-cube"/></svg><div class="n"><div>Minecraft</div><div class="c">5 macros</div></div><span class="sw on"></span></div>
+        <div class="prof off"><svg><use href="#i-zap"/></svg><div class="n"><div>Utilities &amp; Hotkeys</div><div class="c">3 macros</div></div><span class="sw"></span></div>
+        <div class="grow"></div>
+        <div class="setb"><svg><use href="#i-gear"/></svg>Settings</div>
+      </aside>
+      <main class="main">
+        <div class="top"><div class="grow"><h3>Destiny 2 Skate &amp; Tech</h3><div class="sub">4 macros · 4 enabled</div></div>
+          <span class="search" style="width:190px"><svg><use href="#i-search"/></svg>Search</span>
+          <span class="btn"><svg><use href="#i-dl"/></svg>Import</span><span class="btn pri"><svg><use href="#i-plus"/></svg>New macro</span></div>
+        <div class="cards">
+          <div class="gcard">
+            <div class="gh"><span class="gt">Destiny Skate Modes</span><span class="seg"><span class="act"><span class="k">PgUp</span>Wellskate</span><span><span class="k">PgDn</span>Groundskate</span></span></div>
+            <div class="card act"><span class="sw on"></span><div style="min-width:0"><div class="name">Wellskate</div><div class="desc">Heavy cancel into jump and Well of Radiance glide</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 11</span></div>
+            <div class="card"><span class="sw on"></span><div style="min-width:0"><div class="name">Groundskate</div><div class="desc">Jump, light attack, jump, super cancel</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 7</span></div>
+          </div>
+          <div class="card"><span class="sw on"></span><div style="min-width:0"><div class="name">Rocket Recoil Pull-Down</div><div class="desc">Fires, ability, 26 px recoil pull</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 9</span></div>
+          <div class="card"><span class="sw on"></span><div style="min-width:0"><div class="name">Fast V + Escape</div><div class="desc">V, then Escape after 50 ms</div></div><span class="keys"><span class="k">End</span></span><span class="mode">Once · 3</span></div>
+        </div>
+      </main>
+      <div class="status"><span class="dot"></span>Engine running<span class="muted">·</span>Stop everything<span class="k">F12</span><span class="r">2 profiles on · 9 macros live</span></div>
+    </div></div>
+  </section>
+
+  <!-- ================= E: armour light ================= -->
+  <section class="opt">
+    <div class="tag"><b>E</b>Card rows in Sound Switch's light "Armour" theme <span>white shell, grey plates, bold black outlines; the active mode turns solid black</span></div>
+    <div class="scroll"><div class="win armour acc-win">
+      <aside class="side">
+        <div class="brand"><span class="logo">M</span>MacroMaster</div>
+        <div class="eng"><span class="dot" style="background:#1e8e3e"></span><div class="grow"><div class="t">Engine running</div><div class="s">Hotkeys are live</div></div><span class="sw on"></span></div>
+        <div class="lbl">Profiles <svg><use href="#i-plus"/></svg></div>
+        <div class="prof sel"><svg><use href="#i-pad"/></svg><div class="n"><div>Destiny 2 Skate &amp; Tech</div><div class="c">4 macros</div></div><span class="sw on"></span></div>
+        <div class="prof"><svg><use href="#i-cube"/></svg><div class="n"><div>Minecraft</div><div class="c">5 macros</div></div><span class="sw on"></span></div>
+        <div class="prof off"><svg><use href="#i-zap"/></svg><div class="n"><div>Utilities &amp; Hotkeys</div><div class="c">3 macros</div></div><span class="sw"></span></div>
+        <div class="grow"></div>
+        <div class="setb"><svg><use href="#i-gear"/></svg>Settings</div>
+      </aside>
+      <main class="main">
+        <div class="top"><div class="grow"><h3>Destiny 2 Skate &amp; Tech</h3><div class="sub">4 macros · 4 enabled</div></div>
+          <span class="search" style="width:190px"><svg><use href="#i-search"/></svg>Search</span>
+          <span class="btn"><svg><use href="#i-dl"/></svg>Import</span><span class="btn pri"><svg><use href="#i-plus"/></svg>New macro</span></div>
+        <div class="cards">
+          <div class="gcard">
+            <div class="gh"><span class="gt">Destiny Skate Modes</span><span class="seg"><span class="act"><span class="k">PgUp</span>Wellskate</span><span><span class="k">PgDn</span>Groundskate</span></span></div>
+            <div class="card act"><span class="sw on"></span><div style="min-width:0"><div class="name">Wellskate</div><div class="desc">Heavy cancel into jump and Well of Radiance glide</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 11</span></div>
+            <div class="card"><span class="sw on"></span><div style="min-width:0"><div class="name">Groundskate</div><div class="desc">Jump, light attack, jump, super cancel</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 7</span></div>
+          </div>
+          <div class="card"><span class="sw on"></span><div style="min-width:0"><div class="name">Rocket Recoil Pull-Down</div><div class="desc">Fires, ability, 26 px recoil pull</div></div><span class="keys"><span class="k">Ä</span><span class="k">Ö</span><span class="k">L</span></span><span class="mode">Once · 9</span></div>
+        </div>
+      </main>
+      <div class="status"><span class="dot" style="background:#1e8e3e"></span>Engine running<span class="muted">·</span>Stop everything<span class="k">F12</span><span class="r">2 profiles on · 9 macros live</span></div>
+    </div></div>
+    <p style="font-size:13px">Like Sound Switch, B to E could ship with both a dark and this light theme, picked in Settings.</p>
+  </section>
+</div>
+
+<script>
+  document.body.dataset.acc = "mono";
+  document.body.dataset.font = "inter";
+  document.querySelectorAll(".group").forEach(function (g) {
+    var buttons = g.querySelectorAll("button");
+    buttons.forEach(function (b) {
+      b.addEventListener("click", function () {
+        if (b.dataset.acc) document.body.dataset.acc = b.dataset.acc;
+        if (b.dataset.font) document.body.dataset.font = b.dataset.font;
+        buttons.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+      });
+    });
+  });
+</script>

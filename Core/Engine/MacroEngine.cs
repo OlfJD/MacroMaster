@@ -12,7 +12,7 @@ public class MacroEngine : IDisposable
     private const string Muted = "#A3A6B1";
     private const string Danger = "#F2555A";
     private const string Warning = "#F5B547";
-    private const string Accent = "#7C83FF";
+    private const string Accent = "#E4E4E7"; // mono, like the app's white accent
 
     private readonly LowLevelKeyboardHook _keyboardHook = new();
     private readonly LowLevelMouseHook _mouseHook = new();

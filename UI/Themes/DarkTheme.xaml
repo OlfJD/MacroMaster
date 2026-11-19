@@ -5,15 +5,20 @@
 
     <!-- ============================================================
          MacroMaster design tokens
-         Neutral graphite surfaces, one accent (periwinkle), semantic
-         green / amber / red for running / armed / danger.
+         Monochrome, matching SoundSwitcher's "Dark" theme: neutral greys,
+         white as the only accent (switches, primary button, active mode,
+         selection). Colour only means something: green = running,
+         amber = warning, red = danger. Picked as "D, mono, Segoe UI" from
+         design/redesign-board.html.
 
          House rules (keep new UI on these, no one-off values):
            Type     11 label · 12 secondary · 13 body/controls · 14 row title
                     16 H2 · 22 title input · 24 H1
            Radius   RadiusSm 5 (keycaps, tags, list items, icon buttons)
-                    RadiusMd 7 (buttons, inputs, callouts, small tiles)
-                    RadiusLg 10 (cards, popups, large tiles)
+                    RadiusMd 8 (buttons, inputs, callouts, small tiles)
+                    RadiusLg 12 (cards, macro cards, popups, large tiles)
+           Surfaces Bg (window) < Surface (panels, mode groups) < Raised (macro
+                    cards, buttons) < Hover < Pressed
            Height   32 standard control · 28 compact (icon buttons, step rows)
            Spacing  multiples of 4; 32 page gutter, 24 dialog gutter, 16 card padding
            Motion   hover fades in 80 ms / out 160 ms via the "Hover" overlay
@@ -24,27 +29,28 @@
     <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
 
     <CornerRadius x:Key="RadiusSm">5</CornerRadius>
-    <CornerRadius x:Key="RadiusMd">7</CornerRadius>
-    <CornerRadius x:Key="RadiusLg">10</CornerRadius>
+    <CornerRadius x:Key="RadiusMd">8</CornerRadius>
+    <CornerRadius x:Key="RadiusLg">12</CornerRadius>
 
-    <Color x:Key="BgColor">#0F1014</Color>
-    <Color x:Key="SidebarColor">#131419</Color>
-    <Color x:Key="SurfaceColor">#17181E</Color>
-    <Color x:Key="RaisedColor">#1D1F26</Color>
-    <Color x:Key="HoverColor">#23252D</Color>
-    <Color x:Key="PressedColor">#2A2C35</Color>
-    <Color x:Key="BorderColor">#25272F</Color>
-    <Color x:Key="BorderStrongColor">#353843</Color>
+    <Color x:Key="BgColor">#1C1C1F</Color>
+    <Color x:Key="SidebarColor">#18181B</Color>
+    <Color x:Key="SurfaceColor">#222226</Color>
+    <Color x:Key="RaisedColor">#28282D</Color>
+    <Color x:Key="HoverColor">#303035</Color>
+    <Color x:Key="PressedColor">#38383E</Color>
+    <Color x:Key="BorderColor">#29292E</Color>
+    <Color x:Key="BorderStrongColor">#3A3A40</Color>
 
-    <Color x:Key="TextPrimaryColor">#EDEEF1</Color>
-    <Color x:Key="TextSecondaryColor">#A3A6B1</Color>
-    <Color x:Key="TextMutedColor">#6E717D</Color>
+    <Color x:Key="TextPrimaryColor">#F4F4F5</Color>
+    <Color x:Key="TextSecondaryColor">#B4B4BC</Color>
+    <Color x:Key="TextMutedColor">#85858F</Color>
 
-    <Color x:Key="AccentColor">#7C83FF</Color>
-    <Color x:Key="AccentHoverColor">#8E94FF</Color>
-    <Color x:Key="AccentPressedColor">#6A71EB</Color>
-    <Color x:Key="AccentSubtleColor">#202243</Color>
-    <Color x:Key="AccentTextColor">#B3B7FF</Color>
+    <!-- Mono accent: white. Text on it is near-black (OnAccentBrush). -->
+    <Color x:Key="AccentColor">#F4F4F5</Color>
+    <Color x:Key="AccentHoverColor">#FFFFFF</Color>
+    <Color x:Key="AccentPressedColor">#D4D4D8</Color>
+    <Color x:Key="AccentSubtleColor">#34343A</Color>
+    <Color x:Key="AccentTextColor">#F4F4F5</Color>
 
     <Color x:Key="SuccessColor">#3DD68C</Color>
     <Color x:Key="SuccessSubtleColor">#13281E</Color>
@@ -82,7 +88,7 @@
     <SolidColorBrush x:Key="DangerSubtleBrush" Color="{StaticResource DangerSubtleColor}"/>
 
     <!-- Text on a filled accent / danger surface -->
-    <SolidColorBrush x:Key="OnAccentBrush" Color="#0E0F1A"/>
+    <SolidColorBrush x:Key="OnAccentBrush" Color="#111113"/>
     <SolidColorBrush x:Key="OnDangerBrush" Color="#1A0B0C"/>
     <!-- Lighten / darken a filled surface on hover / press -->
     <SolidColorBrush x:Key="LightenBrush" Color="#24FFFFFF"/>
@@ -90,7 +96,7 @@
     <!-- Windows' own close-button red -->
     <SolidColorBrush x:Key="CaptionCloseBrush" Color="#C42B1C"/>
     <!-- Dims content behind an overlay -->
-    <SolidColorBrush x:Key="ScrimBrush" Color="#E6131419"/>
+    <SolidColorBrush x:Key="ScrimBrush" Color="#E618181B"/>
 
     <!-- Logo: identical to the exe icon (generate_icon.ps1), pixel-snapped for 24 px.
          Show it at exactly 24x24 (or a multiple) so the stems stay sharp. -->
@@ -102,7 +108,7 @@
                         <RectangleGeometry Rect="0,0,24,24" RadiusX="5.25" RadiusY="5.25"/>
                     </GeometryDrawing.Geometry>
                 </GeometryDrawing>
-                <GeometryDrawing Brush="#11122B"
+                <GeometryDrawing Brush="#111113"
                                  Geometry="M 6,17 L 6,7 L 9.6,7 L 12,10.15 L 14.4,7 L 18,7 L 18,17 L 15,17 L 15,10.94 L 12,14.88 L 9,10.94 L 9,17 Z"/>
             </DrawingGroup>
         </DrawingImage.Drawing>
@@ -382,7 +388,7 @@
                     <Grid x:Name="Root">
                         <controls:SmoothBorder x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{StaticResource RadiusMd}"/>
                         <!-- Inset by the border so the outline (which code recolours) stays visible -->
-                        <Border x:Name="Hover" Background="{StaticResource HoverBrush}" Margin="1" CornerRadius="6" Opacity="0"/>
+                        <Border x:Name="Hover" Background="{StaticResource HoverBrush}" Margin="1" CornerRadius="7" Opacity="0"/>
                         <ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
                     </Grid>
                     <ControlTemplate.Triggers>
@@ -1055,7 +1061,6 @@
                         <Border x:Name="Bd" Background="Transparent" CornerRadius="{StaticResource RadiusMd}"/>
                         <Border x:Name="Hover" Background="{StaticResource HoverBrush}" CornerRadius="{StaticResource RadiusMd}" Opacity="0"/>
                         <ContentPresenter Margin="{TemplateBinding Padding}"/>
-                        <Border x:Name="Indicator" Width="3" Height="16" CornerRadius="1.5" Background="{StaticResource AccentBrush}" HorizontalAlignment="Left" Margin="-2,0,0,0" Visibility="Collapsed"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -1063,10 +1068,10 @@
                             <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource HoverIn}"/></Trigger.EnterActions>
                             <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource HoverOut}"/></Trigger.ExitActions>
                         </Trigger>
+                        <!-- The shown profile is a raised tile, like a selected macro card -->
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource RaisedBrush}"/>
                             <Setter TargetName="Hover" Property="Background" Value="{StaticResource RaisedBrush}"/>
-                            <Setter TargetName="Indicator" Property="Visibility" Value="Visible"/>
                             <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -1075,28 +1080,79 @@
         </Setter>
     </Style>
 
-    <!-- Macro table row -->
+    <!-- Macro card: every macro is its own rounded tile (no table lines). Inside a mode group the
+         cards sit one step lighter, and the group's active mode gets a white ring, like the active
+         device tile in SoundSwitcher. -->
     <Style x:Key="MacroRow" TargetType="{x:Type ListBoxItem}">
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        <Setter Property="Padding" Value="16,0"/>
+        <Setter Property="Padding" Value="14,0,10,0"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type ListBoxItem}">
                     <Grid>
-                        <Border x:Name="Bd" Background="Transparent" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1"/>
-                        <!-- Stops 1 px short so the row's divider stays visible -->
-                        <Border x:Name="Hover" Background="{StaticResource RaisedBrush}" Margin="0,0,0,1" Opacity="0"/>
+                        <controls:SmoothBorder x:Name="Bd" Background="{StaticResource RaisedBrush}" CornerRadius="{StaticResource RadiusLg}"/>
+                        <controls:SmoothBorder x:Name="Hover" Background="{StaticResource HoverBrush}" CornerRadius="{StaticResource RadiusLg}" Opacity="0"/>
                         <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                        <!-- Outline on top of the fill, so the hover fade never covers it -->
+                        <controls:SmoothBorder x:Name="Ring" CornerRadius="{StaticResource RadiusLg}" BorderBrush="Transparent" BorderThickness="1.5" IsHitTestVisible="False"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <DataTrigger Binding="{Binding RequiresArming}" Value="True">
+                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
+                            <Setter TargetName="Hover" Property="Background" Value="{StaticResource PressedBrush}"/>
+                        </DataTrigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource HoverIn}"/></Trigger.EnterActions>
+                            <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource HoverOut}"/></Trigger.ExitActions>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
+                        </Trigger>
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding RequiresArming}" Value="True"/>
+                                <Condition Binding="{Binding IsCurrentlyArmed}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                        </MultiDataTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- One part of a mode group's switch ("PgUp Wellskate | PgDn Groundskate"). The active mode is
+         filled white; clicking another part makes it the active one. Background / Foreground are set
+         by the item template. -->
+    <Style x:Key="ModeSegment" TargetType="{x:Type Button}">
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRing}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="Medium"/>
+        <Setter Property="Height" Value="28"/>
+        <Setter Property="Margin" Value="1,0"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type Button}">
+                    <Grid>
+                        <controls:SmoothBorder x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="6"/>
+                        <Border x:Name="Hover" Background="{StaticResource HoverBrush}" CornerRadius="6" Opacity="0"/>
+                        <ContentPresenter Margin="4,0,10,0" VerticalAlignment="Center"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource HoverIn}"/></Trigger.EnterActions>
                             <Trigger.ExitActions><BeginStoryboard Storyboard="{StaticResource HoverOut}"/></Trigger.ExitActions>
                         </Trigger>
-                        <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{StaticResource RaisedBrush}"/>
+                        <!-- The active part keeps its white fill under the mouse -->
+                        <Trigger Property="Tag" Value="active">
+                            <Setter TargetName="Hover" Property="Background" Value="Transparent"/>
+                            <Setter Property="Cursor" Value="Arrow"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
