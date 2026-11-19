@@ -225,8 +225,10 @@
                                                 <ControlTemplate TargetType="{x:Type GroupItem}">
                                                     <!-- A mode group is a panel holding its macro cards, with the group's name and a switch
                                                          for its modes on top. Ungrouped macros (Name "") lose the panel in the trigger below. -->
+                                                    <!-- Outlined, so the group reads as one block -->
                                                     <controls:SmoothBorder x:Name="Frame" Margin="0,0,0,8" Padding="8,0,8,0"
-                                                                           Background="{StaticResource SurfaceBrush}" CornerRadius="14">
+                                                                           Background="{StaticResource SurfaceBrush}" CornerRadius="14"
+                                                                           BorderBrush="{StaticResource GroupBorderBrush}" BorderThickness="1.5">
                                                         <StackPanel>
                                                             <Grid x:Name="Header" Height="48" Margin="6,0,0,0">
                                                                 <Grid.ColumnDefinitions>
@@ -276,6 +278,7 @@
                                                             <Setter TargetName="Frame" Property="Padding" Value="0"/>
                                                             <Setter TargetName="Frame" Property="CornerRadius" Value="0"/>
                                                             <Setter TargetName="Frame" Property="Background" Value="Transparent"/>
+                                                            <Setter TargetName="Frame" Property="BorderThickness" Value="0"/>
                                                         </DataTrigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
@@ -331,6 +334,9 @@
                                         <!-- Left-aligned DockPanel: tags are docked right and keep their full width,
                                              the name (last child) takes what's left and ellipsizes instead of pushing tags out of view. -->
                                         <DockPanel HorizontalAlignment="Left">
+                                            <!-- Live mode of a mode group: a small cream dot before the name -->
+                                            <Ellipse x:Name="LiveDot" DockPanel.Dock="Left" Width="7" Height="7" Fill="{StaticResource AccentBrush}"
+                                                     Margin="0,1,8,0" VerticalAlignment="Center" Visibility="Collapsed" ToolTip="The live mode: the hotkey runs this one"/>
                                             <!-- Running -->
                                             <Border DockPanel.Dock="Right" Style="{StaticResource Tag}" Background="{StaticResource SuccessSubtleBrush}" Margin="8,0,0,0"
                                                     Visibility="{Binding IsRunning, Converter={StaticResource BoolToVis}}">
@@ -406,6 +412,13 @@
                                         <Setter TargetName="TriggerCaps" Property="Opacity" Value="0.45"/>
                                         <Setter TargetName="ModePanel" Property="Opacity" Value="0.45"/>
                                     </DataTrigger>
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding RequiresArming}" Value="True"/>
+                                            <Condition Binding="{Binding IsCurrentlyArmed}" Value="True"/>
+                                        </MultiDataTrigger.Conditions>
+                                        <Setter TargetName="LiveDot" Property="Visibility" Value="Visible"/>
+                                    </MultiDataTrigger>
                                 </DataTemplate.Triggers>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

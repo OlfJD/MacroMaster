@@ -68,6 +68,8 @@
     <SolidColorBrush x:Key="PressedBrush" Color="{StaticResource PressedColor}"/>
     <SolidColorBrush x:Key="BorderBrush" Color="{StaticResource BorderColor}"/>
     <SolidColorBrush x:Key="BorderStrongBrush" Color="{StaticResource BorderStrongColor}"/>
+    <!-- Outline of a mode group: clearly visible, still quieter than the cream accent -->
+    <SolidColorBrush x:Key="GroupBorderBrush" Color="#4A4A51"/>
 
     <SolidColorBrush x:Key="TextPrimaryBrush" Color="{StaticResource TextPrimaryColor}"/>
     <SolidColorBrush x:Key="TextSecondaryBrush" Color="{StaticResource TextSecondaryColor}"/>
@@ -1081,8 +1083,8 @@
     </Style>
 
     <!-- Macro card: every macro is its own rounded tile (no table lines). Inside a mode group the
-         cards sit one step lighter, and the group's active mode gets a white ring, like the active
-         device tile in SoundSwitcher. -->
+         cards sit one step lighter; the group itself is outlined, and its live mode has a small dot
+         before the name (in the item template). -->
     <Style x:Key="MacroRow" TargetType="{x:Type ListBoxItem}">
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
@@ -1111,13 +1113,6 @@
                         <Trigger Property="IsSelected" Value="True">
                             <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
                         </Trigger>
-                        <MultiDataTrigger>
-                            <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding RequiresArming}" Value="True"/>
-                                <Condition Binding="{Binding IsCurrentlyArmed}" Value="True"/>
-                            </MultiDataTrigger.Conditions>
-                            <Setter TargetName="Ring" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
-                        </MultiDataTrigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
