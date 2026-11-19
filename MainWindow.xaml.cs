@@ -292,7 +292,7 @@ public partial class MainWindow : Window
         WindowHelper.ForceToFront(this);
     }
 
-    private void Notify(string title, string subtitle, string icon, string color = "#E4E4E7", int durationMs = 2200)
+    private void Notify(string title, string subtitle, string icon, string color = "#ECE4D3", int durationMs = 2200)
     {
         _hudOverlay?.ShowNotification(title, subtitle, icon, color, _engine.Settings.OverlayPosition, durationMs, _engine.Settings.OverlayCustomSpot);
     }
@@ -1194,7 +1194,7 @@ public partial class MainWindow : Window
         page.RestartAsAdminRequested += RestartAsAdministrator;
         page.ModeIndicatorPreviewRequested += PreviewModeIndicator;
         page.NotificationPreviewRequested += (position, spot) =>
-            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", "#E4E4E7",
+            _hudOverlay?.ShowNotification("This is a notification", "It shows up here when a macro starts or stops", "logo", "#ECE4D3",
                                           position, Math.Max(2500, _engine.Settings.HudDurationMs), spot);
         bool wasAutostart = _engine.Settings.StartWithWindows, wasAdmin = _engine.Settings.StartAsAdmin;
         page.Finished += saved =>

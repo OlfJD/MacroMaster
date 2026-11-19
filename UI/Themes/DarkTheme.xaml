@@ -45,12 +45,12 @@
     <Color x:Key="TextSecondaryColor">#B4B4BC</Color>
     <Color x:Key="TextMutedColor">#85858F</Color>
 
-    <!-- Mono accent: white. Text on it is near-black (OnAccentBrush). -->
-    <Color x:Key="AccentColor">#F4F4F5</Color>
-    <Color x:Key="AccentHoverColor">#FFFFFF</Color>
-    <Color x:Key="AccentPressedColor">#D4D4D8</Color>
+    <!-- Mono accent: cream (softer than pure white on the greys). Text on it is near-black (OnAccentBrush). -->
+    <Color x:Key="AccentColor">#ECE4D3</Color>
+    <Color x:Key="AccentHoverColor">#F3ECDD</Color>
+    <Color x:Key="AccentPressedColor">#DCD2BE</Color>
     <Color x:Key="AccentSubtleColor">#34343A</Color>
-    <Color x:Key="AccentTextColor">#F4F4F5</Color>
+    <Color x:Key="AccentTextColor">#ECE4D3</Color>
 
     <Color x:Key="SuccessColor">#3DD68C</Color>
     <Color x:Key="SuccessSubtleColor">#13281E</Color>
