@@ -1,7 +1,5 @@
 @echo off
-if exist "%~dp0MacroMaster.exe" (
-    start "" "%~dp0MacroMaster.exe"
-) else (
-    start "" "%~dp0release\MacroMaster.exe"
-)
+rem Starts the installed MacroMaster (the copy that starts with Windows and updates itself).
+rem To run from the source code instead, use "Run Dev.bat".
+start "" "%LOCALAPPDATA%\Programs\MacroMaster\MacroMaster.exe"
 exit

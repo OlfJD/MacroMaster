@@ -28,6 +28,7 @@ public partial class HudOverlayWindow : Window
     public HudOverlayWindow()
     {
         InitializeComponent();
+        OverlayPlacement.KeepOnTop(this);
 
         _hideTimer.Tick += (_, _) =>
         {

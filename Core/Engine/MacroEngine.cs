@@ -600,11 +600,56 @@ public class MacroEngine : IDisposable
                 }
                 finally
                 {
+                    // A run that ends must not leave anything pressed: "Key down S" + "Mouse down Right"
+                    // as a Once macro used to keep both held forever, with nothing left to stop.
+                    ReleaseLeftDown(macro.Actions);
                     _runningTasks.TryRemove(runKey, out _);
                     _singleRuns.TryRemove(macro.Id, out _);
                 }
             });
         }
+    }
+
+    /// <summary>
+    /// Releases the keys and buttons these steps press down without a matching release later on.
+    /// Only those: keys another macro (e.g. a "hold left click" loop) keeps down are left alone.
+    /// </summary>
+    private void ReleaseLeftDown(IEnumerable<MacroAction> actions)
+    {
+        foreach (var step in StillDownAfter(actions))
+        {
+            if (step.Type == ActionType.KeyDown) _simulator.KeyUp(step.Key);
+            else _simulator.MouseUp(step.MouseButton);
+        }
+    }
+
+    /// <summary>The "down" steps whose key or button is still down once all the steps have run.</summary>
+    internal static List<MacroAction> StillDownAfter(IEnumerable<MacroAction> actions)
+    {
+        var down = new List<MacroAction>();
+        foreach (var a in actions)
+        {
+            switch (a.Type)
+            {
+                case ActionType.KeyDown when !string.IsNullOrEmpty(a.Key):
+                    if (!down.Any(d => d.Type == ActionType.KeyDown && SameKey(d.Key, a.Key))) down.Add(a);
+                    break;
+                case ActionType.KeyUp:
+                    down.RemoveAll(d => d.Type == ActionType.KeyDown && SameKey(d.Key, a.Key));
+                    break;
+                case ActionType.MouseDown:
+                    if (!down.Any(d => d.Type == ActionType.MouseDown && d.MouseButton == a.MouseButton)) down.Add(a);
+                    break;
+                case ActionType.MouseUp:
+                    down.RemoveAll(d => d.Type == ActionType.MouseDown && d.MouseButton == a.MouseButton);
+                    break;
+            }
+        }
+        return down;
+
+        static bool SameKey(string x, string y) =>
+            string.Equals(x, y, StringComparison.OrdinalIgnoreCase) ||
+            (KeyHelper.NormalizeToVk(x) is var vx && vx != 0 && vx == KeyHelper.NormalizeToVk(y));
     }
 
     private void ExecuteActionSequence(ObservableCollection<MacroAction> actions, CancellationToken token)

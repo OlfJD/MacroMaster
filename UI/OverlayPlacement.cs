@@ -55,6 +55,24 @@ public static class OverlayPlacement
         }
     }
 
+    /// <summary>
+    /// Keeps <paramref name="window"/> above everything while it is on screen. Being "topmost" once
+    /// isn't enough: a game that makes its own window topmost later (e.g. when going fullscreen or
+    /// alt-tabbing back) lands above it. Twice a second it claims the top again; costs nothing.
+    /// It can't beat a game in exclusive fullscreen: then Windows doesn't draw any other window.
+    /// </summary>
+    public static void KeepOnTop(System.Windows.Window window)
+    {
+        var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+        timer.Tick += (_, _) =>
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero && window.IsVisible)
+                SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        };
+        window.IsVisibleChanged += (_, _) => { if (window.IsVisible) timer.Start(); else timer.Stop(); };
+    }
+
     /// <summary>Turns a point on screen (physical pixels) into a <see cref="ScreenSpot"/> on its monitor.</summary>
     public static ScreenSpot SpotAt(System.Drawing.Point centre)
     {
@@ -77,6 +95,8 @@ public static class OverlayPlacement
     #region Win32
 
     private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOOWNERZORDER = 0x0200;
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOACTIVATE = 0x0010;
 

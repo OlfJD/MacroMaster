@@ -18,6 +18,7 @@ public partial class ModeIndicatorWindow : Window
     public ModeIndicatorWindow()
     {
         InitializeComponent();
+        OverlayPlacement.KeepOnTop(this);
 
         SourceInitialized += (_, _) =>
         {
