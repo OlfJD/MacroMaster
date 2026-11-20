@@ -39,16 +39,24 @@ public class MacroTrigger
             {
                 if (!string.IsNullOrWhiteSpace(chord) && !parts.Contains(chord))
                 {
-                    parts.Add(chord.ToUpperInvariant());
+                    parts.Add(Friendly(chord));
                 }
             }
 
             if (!string.IsNullOrWhiteSpace(PrimaryKey))
             {
-                parts.Add(PrimaryKey.ToUpperInvariant());
+                parts.Add(Friendly(PrimaryKey));
             }
 
             return parts.Count > 0 ? string.Join(" + ", parts) : "None";
+
+            // Imported / older macros store the side buttons by their Windows names
+            static string Friendly(string key) => key.Trim().ToUpperInvariant() switch
+            {
+                "XBUTTON1" => "MOUSE 4",
+                "XBUTTON2" => "MOUSE 5",
+                var k => k
+            };
         }
     }
 }

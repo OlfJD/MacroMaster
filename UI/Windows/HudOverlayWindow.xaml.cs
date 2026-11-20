@@ -94,7 +94,7 @@ public partial class HudOverlayWindow : Window
     private static Color ParseColor(string hex)
     {
         try { return (Color)ColorConverter.ConvertFromString(hex); }
-        catch { return Color.FromRgb(0x7C, 0x83, 0xFF); }
+        catch { return Color.FromRgb(0xEC, 0xE4, 0xD3); } // the default accent (cream)
     }
 
     private static Color Blend(Color bg, Color fg, double t) => Color.FromRgb(

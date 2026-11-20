@@ -36,7 +36,7 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 ## To-do
 
 - [ ] **Language support**: every visible text is still English and written straight into the XAML / code. Move the texts into resource files (e.g. `Strings.resx` + `Strings.de.resx`), pick the language from Windows with a manual choice in Settings, and translate. SmartNotes already has a `LocalizationService` that could be reused.
-- [ ] Mouse buttons are shown as `XBUTTON1` / `XBUTTON2` in the list; "Mouse 4" / "Mouse 5" would read better.
+- [x] Mouse buttons are shown as `XBUTTON1` / `XBUTTON2` in the list; "Mouse 4" / "Mouse 5" would read better. (2.7.3)
 
 ---
 
@@ -235,3 +235,9 @@ MacroMaster is a high-performance, ultra-low latency desktop macro management en
 ### Version 2.7.2 - Overlays keep the top spot, one installed copy (2026-11-20) — app version 1.2.1
 - **Notifications and the mode indicator re-claim "always on top" twice a second while visible** (`OverlayPlacement.KeepOnTop`). Being topmost once wasn't enough when a game later put its own window on top. A game in exclusive fullscreen (Minecraft with F11) still hides every other window; that is Windows' rule and only an in-game overlay (injection) gets around it. Windowed / borderless fullscreen shows them.
 - **One copy on this PC:** the installed copy in `%LocalAppData%\Programs\MacroMaster` (starts with Windows, updates itself). Removed the old 1.0.0 builds in the project root and `release\`, the build output folders, and old test copies. `Launch MacroMaster.bat` now starts the installed copy; `Run Dev.bat` still runs from source.
+
+### Version 2.7.3 - Cream icon, README in the SmartNotes style (2026-11-21) — app version 1.2.2
+- **App icon matches the mono redesign**: a cream tile (the default accent `#ECE4D3`) with the near-black "M", like the in-app logo. `generate_icon.ps1` regenerated `Assets/app.ico` / `app.png`. The notification's fallback accent is cream instead of the old periwinkle.
+- **"1 step"** instead of "1 steps" in the macro list (`StepCountConverter`).
+- **Side mouse buttons read "MOUSE 4" / "MOUSE 5"** in the list, also for imported macros that store `XButton1` / `XButton2` (`MacroTrigger.DisplayString`). Test: `TriggerDisplayTests`.
+- **README rewritten** short and to the point, like SmartNotes': download line, one main screenshot, feature list, editor screenshot, mode groups and settings folded away, shortcuts, build. Screenshots retaken with the new UI from demo profiles; `overlay.png` dropped.

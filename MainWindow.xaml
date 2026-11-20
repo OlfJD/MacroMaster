@@ -372,7 +372,7 @@
                                     <!-- How often · steps, quiet text right of the hotkey -->
                                     <TextBlock x:Name="ModePanel" Grid.Column="3" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"
                                                HorizontalAlignment="Right" TextTrimming="CharacterEllipsis">
-                                        <Run Text="{Binding Converter={StaticResource ModeLabel}, Mode=OneWay}"/><Run Text=" · "/><Run x:Name="StepsText" Text="{Binding Actions.Count, Mode=OneWay}"/><Run Text=" steps"/>
+                                        <Run Text="{Binding Converter={StaticResource ModeLabel}, Mode=OneWay}"/><Run Text=" · "/><Run Text="{Binding Actions.Count, Mode=OneWay, Converter={StaticResource StepCount}}"/>
                                     </TextBlock>
 
                                     <!-- Row actions (revealed on hover) -->

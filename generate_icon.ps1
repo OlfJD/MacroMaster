@@ -1,6 +1,7 @@
 # Generates Assets/app.ico and Assets/app.png for MacroMaster.
 #
-# The mark: a solid periwinkle rounded tile with a bold, flat-capped "M" in near-black.
+# The mark: a solid cream rounded tile (the default accent, AccentTheme.Default) with a bold,
+# flat-capped "M" in near-black, matching the in-app logo.
 # No gradients, glows or outlines. Every icon size is rendered natively from vector
 # shapes (not downscaled), and the M's vertical strokes are snapped to whole pixels
 # so 16/20/24/32 px stay sharp in the taskbar and tray.
@@ -9,8 +10,8 @@
 
 Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase
 
-$TileColor  = [System.Windows.Media.Color]::FromRgb(0x7C, 0x83, 0xFF)
-$GlyphColor = [System.Windows.Media.Color]::FromRgb(0x11, 0x12, 0x2B)
+$TileColor  = [System.Windows.Media.Color]::FromRgb(0xEC, 0xE4, 0xD3)
+$GlyphColor = [System.Windows.Media.Color]::FromRgb(0x11, 0x11, 0x13)
 
 # The "M" is a single filled polygon (unit tile coordinates, 0..1):
 #   flat tops, vertical stems of width W, diagonals whose horizontal width H gives the

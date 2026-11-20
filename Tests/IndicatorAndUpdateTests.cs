@@ -93,3 +93,14 @@ public class AutostartTaskTests
         Assert.Equal("--autostart", xml.Descendants(Ns + "Arguments").Single().Value);
     }
 }
+
+public class TriggerDisplayTests
+{
+    [Theory]
+    [InlineData("XButton2", "MOUSE 5")]
+    [InlineData("XButton1", "MOUSE 4")]
+    [InlineData("Mouse 5", "MOUSE 5")]
+    [InlineData("F6", "F6")]
+    public void Side_mouse_buttons_read_as_mouse_4_and_5(string key, string shown)
+        => Assert.Equal(shown, new MacroTrigger { PrimaryKey = key }.DisplayString);
+}

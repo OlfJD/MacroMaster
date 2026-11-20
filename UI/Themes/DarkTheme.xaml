@@ -120,6 +120,7 @@
     <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     <conv:TriggerKeysConverter x:Key="TriggerKeys"/>
     <conv:ModeLabelConverter x:Key="ModeLabel"/>
+    <conv:StepCountConverter x:Key="StepCount"/>
     <conv:ModeIconConverter x:Key="ModeIcon"/>
     <conv:ProcessLabelConverter x:Key="ProcessLabel"/>
     <conv:IsGlobalProcessConverter x:Key="IsGlobalProcess"/>
