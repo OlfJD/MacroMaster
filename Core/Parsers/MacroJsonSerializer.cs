@@ -214,17 +214,33 @@ public static class MacroJsonSerializer
         return copy;
     }
 
-    public static AppSettings LoadSettings(string filePath)
+    public static AppSettings LoadSettings(string filePath) => LoadSettings(filePath, out _);
+
+    /// <summary>
+    /// Loads the settings; an unreadable file falls back to the last good copy (.bak).
+    /// <paramref name="fromFile"/> is false when neither could be read and these are the defaults.
+    /// Defaults must never be acted on as if the user chose them: "Start with Windows" defaults to
+    /// off, and syncing that removed the user's start entry.
+    /// </summary>
+    public static AppSettings LoadSettings(string filePath, out bool fromFile)
     {
-        if (!File.Exists(filePath)) return new AppSettings();
-        try
+        foreach (string path in new[] { filePath, filePath + ".bak" })
         {
-            string json = File.ReadAllText(filePath);
-            return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
+            if (!File.Exists(path)) continue;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options);
+                    if (settings == null) break;
+                    fromFile = true;
+                    return settings;
+                }
+                catch (IOException) { Thread.Sleep(150); } // being written right now (e.g. the previous copy quitting)
+                catch { break; }                            // broken: try the backup
+            }
         }
-        catch
-        {
-            return new AppSettings();
-        }
+        fromFile = false;
+        return new AppSettings();
     }
 }

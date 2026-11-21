@@ -182,7 +182,7 @@ public partial class MainWindow : Window
         if (_started) return; // shown later from the tray: Loaded fires then, everything already runs
         _started = true;
 
-        var settings = MacroJsonSerializer.LoadSettings(_settingsFilePath);
+        var settings = MacroJsonSerializer.LoadSettings(_settingsFilePath, out bool settingsFromFile);
         var load = MacroJsonSerializer.LoadProfiles(_profilesFilePath);
         var profiles = load.Profiles;
         bool firstRun = profiles == null || profiles.Count == 0;
@@ -217,7 +217,9 @@ public partial class MainWindow : Window
         // A copy on its own data folder (MACROMASTER_DATA_DIR, for trying things out) must not touch the
         // Windows start entry or update the app: both are shared with the real installation.
         bool sandbox = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MACROMASTER_DATA_DIR"));
-        if (!sandbox) SyncAutostart(mayAskForPermission: false);
+        // Only with the user's own settings: if the file couldn't be read these are the defaults
+        // ("Start with Windows" off), and syncing them would delete the start entry.
+        if (!sandbox && settingsFromFile) SyncAutostart(mayAskForPermission: false);
         if (!sandbox) AppUpdater.Start(_engine,
             userBusy: () => IsEditorOpen || IsActive,
             windowShown: () => IsVisible && WindowState != WindowState.Minimized,

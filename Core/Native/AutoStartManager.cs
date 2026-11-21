@@ -24,6 +24,30 @@ public static class AutoStartManager
     private const string AppName = "MacroMaster";
     internal static string TaskName = "MacroMaster"; // tests use another name
 
+    /// <summary>
+    /// Every sync and every change to the start entry is written here, one line each, so a start
+    /// entry that goes missing can be traced back. Null = no log (tests).
+    /// </summary>
+    internal static string? LogPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroMaster", "autostart.log");
+
+    private static void Log(string what)
+    {
+        if (LogPath == null) return;
+        try
+        {
+            var info = new FileInfo(LogPath);
+            if (info.Exists && info.Length > 64 * 1024)
+            {
+                var lines = File.ReadAllLines(LogPath);
+                File.WriteAllLines(LogPath, lines.Skip(lines.Length / 2)); // keep the newer half
+            }
+            var version = typeof(AutoStartManager).Assembly.GetName().Version;
+            File.AppendAllText(LogPath, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}  v{version?.ToString(3)} pid {Environment.ProcessId}  {what}{Environment.NewLine}");
+        }
+        catch { }
+    }
+
     public enum Outcome
     {
         /// <summary>Everything is set up as asked.</summary>
@@ -74,6 +98,14 @@ public static class AutoStartManager
     /// </summary>
     public static Outcome Sync(bool enable, bool asAdmin, bool mayAskForPermission)
     {
+        var outcome = SyncCore(enable, asAdmin, mayAskForPermission);
+        Log($"sync: start with Windows={enable}, as admin={asAdmin}, may ask={mayAskForPermission}, elevated={IsElevated} -> {outcome}" +
+            $" (start entry {(IsRunKeySet() ? "set" : "not set")})");
+        return outcome;
+    }
+
+    private static Outcome SyncCore(bool enable, bool asAdmin, bool mayAskForPermission)
+    {
         try
         {
             string exe = GetExecutablePath();
@@ -118,6 +150,7 @@ public static class AutoStartManager
         catch (Exception ex)
         {
             Debug.WriteLine($"Error configuring startup: {ex.Message}");
+            Log($"sync failed: {ex.GetType().Name}: {ex.Message}");
             return Outcome.Failed;
         }
     }
@@ -128,15 +161,23 @@ public static class AutoStartManager
     {
         using var key = Registry.CurrentUser.OpenSubKey(StartupRegistryKey, true);
         if (key == null) return;
+        string? current = key.GetValue(AppName)?.ToString();
         if (exe == null)
         {
-            if (key.GetValue(AppName) != null) key.DeleteValue(AppName, false);
+            if (current != null)
+            {
+                key.DeleteValue(AppName, false);
+                Log($"start entry removed (was {current})");
+            }
             return;
         }
         string expected = $"\"{exe}\" --autostart";
         // Exact compare so an entry without the --autostart flag (older versions) gets updated too
-        if (!string.Equals(key.GetValue(AppName)?.ToString(), expected, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(current, expected, StringComparison.OrdinalIgnoreCase))
+        {
             key.SetValue(AppName, expected);
+            Log(current == null ? $"start entry added: {expected}" : $"start entry changed: {current} -> {expected}");
+        }
     }
 
     public static bool IsRunKeySet()
@@ -223,6 +264,7 @@ public static class AutoStartManager
             File.WriteAllText(xmlPath, BuildTaskXml(exe, user, elevatedTask), Encoding.Unicode);
             var (code, _) = RunSchtasks($"/Create /TN \"{TaskName}\" /XML \"{xmlPath}\" /F", runElevated);
             if (code == 0 && elevatedTask) SetTaskMarker(exe);
+            Log($"task \"{TaskName}\" {(code == 0 ? "created" : $"not created (schtasks exit code {code})")}");
             return code == 0;
         }
         finally
@@ -237,6 +279,7 @@ public static class AutoStartManager
         bool deleted = RunSchtasks($"/Delete /TN \"{TaskName}\" /F", elevated: false).Code == 0
                     || (!IsElevated && mayAskForPermission && RunSchtasks($"/Delete /TN \"{TaskName}\" /F", elevated: true).Code == 0);
         if (deleted) SetTaskMarker(null);
+        Log($"task \"{TaskName}\" {(deleted ? "deleted" : "could not be deleted")}");
         return deleted;
     }
 
