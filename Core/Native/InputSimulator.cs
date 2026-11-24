@@ -257,20 +257,38 @@ public class InputSimulator : IDisposable
         var input = new Win32Api.INPUT
         {
             type = Win32Api.INPUT_KEYBOARD,
-            u = new Win32Api.InputUnion
-            {
-                ki = new Win32Api.KEYBDINPUT
-                {
-                    wVk = vkCode,
-                    wScan = (ushort)Win32Api.MapVirtualKey(vkCode, 0),
-                    dwFlags = isKeyUp ? Win32Api.KEYEVENTF_KEYUP : 0,
-                    time = 0,
-                    dwExtraInfo = UIntPtr.Zero
-                }
-            }
+            u = new Win32Api.InputUnion { ki = KeyEvent(vkCode, isKeyUp) }
         };
 
         Win32Api.SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Win32Api.INPUT)));
+    }
+
+    private const uint MAPVK_VK_TO_VSC_EX = 4;
+
+    /// <summary>
+    /// One key event as a real keyboard would produce it: the virtual key (what normal programs read)
+    /// plus its scan code (what games reading the keyboard directly look at), with the "extended" flag
+    /// for the keys that share a scan code with a numpad key. Without that flag such games took the
+    /// arrow keys, Home / End, PgUp / PgDn, Insert / Delete, right Ctrl / Alt and numpad Enter for
+    /// numpad keys. The virtual key stays set (rather than sending by scan code alone) so a numpad
+    /// key doesn't turn into Insert / End / … depending on Num Lock.
+    /// </summary>
+    internal static Win32Api.KEYBDINPUT KeyEvent(ushort vkCode, bool isKeyUp)
+    {
+        uint scan = Win32Api.MapVirtualKey(vkCode, MAPVK_VK_TO_VSC_EX); // e.g. 0xE01D for right Ctrl: prefix byte + code
+        // Windows' own list of extended keys. The lookup above only reports some of them: for the
+        // arrows, Home / End, PgUp / PgDn and Insert / Delete it returns the numpad key's code,
+        // because with Num Lock off the numpad sends those same virtual keys.
+        bool extended = (scan >> 8) is 0xE0 or 0xE1 || vkCode is (>= 0x21 and <= 0x28) or 0x2D or 0x2E or 0x90 or 0x2C;
+        if (vkCode == 0x2C) scan = 0x37; // Print Screen sends E0 37 (the table names SysRq's 0x54)
+        return new Win32Api.KEYBDINPUT
+        {
+            wVk = vkCode,
+            wScan = (ushort)(scan & 0xFF),
+            dwFlags = (isKeyUp ? Win32Api.KEYEVENTF_KEYUP : 0) | (extended ? Win32Api.KEYEVENTF_EXTENDEDKEY : 0),
+            time = 0,
+            dwExtraInfo = UIntPtr.Zero
+        };
     }
 
     #region High-Resolution Waitable Timer
