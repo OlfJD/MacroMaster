@@ -726,8 +726,9 @@ public class MacroEngine : IDisposable
                     int delay = action.DelayMs;
                     if (action.RandomJitterMs > 0)
                     {
-                        int jitter = Random.Shared.Next(-action.RandomJitterMs, action.RandomJitterMs + 1);
-                        delay = Math.Max(1, delay + jitter);
+                        // In long: a huge "give or take" overflowed int and ended the run with an error
+                        long jitter = Random.Shared.NextInt64(-(long)action.RandomJitterMs, action.RandomJitterMs + 1L);
+                        delay = (int)Math.Clamp(delay + jitter, 1, int.MaxValue);
                     }
                     InputSimulator.PreciseSleep(delay, token);
                     break;

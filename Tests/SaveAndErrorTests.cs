@@ -63,4 +63,24 @@ public class SaveAndErrorTests : IDisposable
         Assert.True(WaitFor(() => h.Sim.Count("char x") == 1));
         Assert.True(WaitFor(() => h.Sim.Count("mouse up Right") == 1)); // and lets go once it ends
     }
+
+    [Fact]
+    public void Odd_but_possible_step_values_do_not_end_the_run_with_an_error()
+    {
+        // A "give or take" as large as the field allows overflowed; a media step without a command
+        // (null in a hand-edited or imported file) threw
+        var m = Macro("Odd", "l", actions: new[]
+        {
+            new MacroAction { Type = ActionType.Media, MediaCommand = null! },
+            new MacroAction { Type = ActionType.Delay, DelayMs = 1, RandomJitterMs = int.MaxValue },
+            Type("x")
+        });
+        using var h = new EngineHarness(Profile("P", Array.Empty<string>(), m));
+
+        h.Tap(L);
+        Thread.Sleep(200);
+        h.Tap(F12); // the wait may come out long: cut it short
+
+        Assert.DoesNotContain(h.Hud, s => s.Contains("Stopped on an error"));
+    }
 }

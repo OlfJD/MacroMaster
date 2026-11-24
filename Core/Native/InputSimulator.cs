@@ -166,7 +166,7 @@ public class InputSimulator : IDisposable
 
     public void SendMediaCommand(string command)
     {
-        int vk = command.ToLowerInvariant() switch
+        int vk = (command ?? string.Empty).ToLowerInvariant() switch // null from a hand-edited / imported file
         {
             "playpause" or "play_pause" or "pause" => 0xB3, // VK_MEDIA_PLAY_PAUSE
             "next" or "nexttrack" => 0xB0,                  // VK_MEDIA_NEXT_TRACK

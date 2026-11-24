@@ -101,6 +101,14 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         TxtName.TextChanged += (_, _) => UpdateFooter();
         RadioHold.Checked += (_, _) => UpdateFooter();
         RadioHold.Unchecked += (_, _) => UpdateFooter();
+        RadioRepeat.Checked += (_, _) => UpdateFooter();
+        RadioRepeat.Unchecked += (_, _) => UpdateFooter();
+        TxtRepeatCount.TextChanged += (_, _) => UpdateFooter();
+        // A step field that isn't a number turns red and the step keeps its last good value, which Save
+        // used to store without a word. Check again whenever a step field changes.
+        ActionsList.AddHandler(System.Windows.Controls.Primitives.TextBoxBase.TextChangedEvent,
+            new System.Windows.Controls.TextChangedEventHandler((_, _) =>
+                Dispatcher.BeginInvoke(UpdateFooter, System.Windows.Threading.DispatcherPriority.Input)));
         foreach (var r in new[] { RadioOnce, RadioRepeat, RadioLoop, RadioHold }) r.Checked += (_, _) => UpdateIndicatorOption();
         UpdateIndicatorOption();
         _loadedState = CurrentState();
@@ -168,7 +176,8 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
     private void SaveBtn_Click(object sender, RoutedEventArgs e)
     {
         StopEverything();
-        if (Actions.Count == 0) return; // button is disabled in this state anyway
+        UpdateFooter(); // the button is disabled while something is missing or invalid; check the latest state
+        if (!BtnSave.IsEnabled) return;
 
         Macro.Name = !string.IsNullOrWhiteSpace(TxtName.Text) ? TxtName.Text.Trim()
                    : !string.IsNullOrEmpty(_primaryKey) ? $"{BuildTrigger().DisplayString} macro"
@@ -445,7 +454,7 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
 
     private void Action_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(MacroAction.DelayMs) or nameof(MacroAction.Type) or nameof(MacroAction.Key) or nameof(MacroAction.TextContent))
+        if (e.PropertyName is nameof(MacroAction.DelayMs) or nameof(MacroAction.RandomJitterMs) or nameof(MacroAction.Type) or nameof(MacroAction.Key) or nameof(MacroAction.TextContent))
             UpdateSummary();
         if (e.PropertyName == nameof(MacroAction.Type)) UpdateDepths();
 
@@ -483,6 +492,21 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         else if (Actions.Any(a => a.Type is ActionType.KeyTap or ActionType.KeyDown or ActionType.KeyUp && string.IsNullOrWhiteSpace(a.Key)))
         {
             hint = "A key step has no key yet — click its “Set key” button.";
+            warn = true;
+        }
+        else if (HasInvalidStepField())
+        {
+            hint = "A step has a field marked red — type a whole number there.";
+            warn = true;
+        }
+        else if (Actions.Any(a => a.DelayMs < 0 || a.RandomJitterMs < 0))
+        {
+            hint = "A wait or hold time is below 0 ms.";
+            warn = true;
+        }
+        else if (RadioRepeat.IsChecked == true && !(int.TryParse(TxtRepeatCount.Text.Trim(), out int times) && times >= 1))
+        {
+            hint = "“Repeat … times” needs a whole number of 1 or more.";
             warn = true;
         }
         else if (Actions.Any(a => a.Type == ActionType.Text && string.IsNullOrEmpty(a.TextContent)))
@@ -524,6 +548,22 @@ public partial class MacroEditorView : System.Windows.Controls.UserControl
         FooterIcon.Foreground = TxtFooterHint.Foreground;
         FooterIcon.Visibility = string.IsNullOrEmpty(hint) ? Visibility.Collapsed : Visibility.Visible;
         BtnSave.IsEnabled = Actions.Count > 0 && !warn;
+    }
+
+    /// <summary>A step's number field shows red: what's typed there isn't a number (the step still has its last good value).</summary>
+    private bool HasInvalidStepField()
+    {
+        return Descendants(ActionsList).OfType<System.Windows.Controls.TextBox>().Any(System.Windows.Controls.Validation.GetHasError);
+
+        static IEnumerable<DependencyObject> Descendants(DependencyObject parent)
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                yield return child;
+                foreach (var d in Descendants(child)) yield return d;
+            }
+        }
     }
 
     private void AddStep(MacroAction action)
