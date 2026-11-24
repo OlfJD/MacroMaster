@@ -513,7 +513,7 @@ public class MacroEngine : IDisposable
         var run = new Run(cts, macro);
         _runningTasks[macro.Id] = run;
 
-        StartRun(() =>
+        StartRun(macro, () =>
         {
             try
             {
@@ -568,9 +568,18 @@ public class MacroEngine : IDisposable
     /// Starts a macro run on a thread of its own. A run spends nearly all its time waiting, and on the
     /// shared thread pool every running loop kept a pool thread busy: with a few loops on, a new run
     /// could wait half a second or more for a free thread before its first step.
+    /// A step that fails ends the run (its own clean-up still runs) and is reported instead of vanishing.
     /// </summary>
-    private static void StartRun(Action body) =>
-        Task.Factory.StartNew(body, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    private void StartRun(MacroDefinition macro, Action body) =>
+        Task.Factory.StartNew(() =>
+        {
+            try { body(); }
+            catch (Exception ex)
+            {
+                AppLog.Error($"macro \"{macro.Name}\" stopped on an error", ex);
+                TriggerHud(macro.Name, "Stopped on an error (see errors.log)", "octagon-x", Danger);
+            }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     private void StopLoop(MacroDefinition macro, bool announce)
     {
@@ -613,7 +622,7 @@ public class MacroEngine : IDisposable
             var cts = new CancellationTokenSource();
             _runningTasks[runKey] = new Run(cts, macro);
 
-            StartRun(() =>
+            StartRun(macro, () =>
             {
                 try
                 {

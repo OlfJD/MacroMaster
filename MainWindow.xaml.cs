@@ -1302,11 +1302,29 @@ public partial class MainWindow : Window
         FadeIn(MainPane);
     }
 
+    private bool _saveFailureShown;
+
     private void SaveState()
     {
         if (!_isInitialized || string.IsNullOrEmpty(_profilesFilePath)) return;
-        MacroJsonSerializer.SaveProfiles(_engine.Profiles.ToList(), _profilesFilePath);
-        MacroJsonSerializer.SaveSettings(_engine.Settings, _settingsFilePath);
+        try
+        {
+            MacroJsonSerializer.SaveProfiles(_engine.Profiles.ToList(), _profilesFilePath);
+            MacroJsonSerializer.SaveSettings(_engine.Settings, _settingsFilePath);
+            _saveFailureShown = false;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Locked for longer by another program, read-only, disk full… The changes stay in memory
+            // and go out with the next save that works. Used to throw a modal error box, also over a
+            // game when a mode switch key saved.
+            Core.AppLog.Error($"saving to {Path.GetDirectoryName(_profilesFilePath)} failed", ex);
+            if (!_saveFailureShown)
+            {
+                Notify("Couldn't save your changes", "Trying again with your next change. Details in errors.log", "octagon-x", "#F2555A", 8000);
+                _saveFailureShown = true;
+            }
+        }
     }
 
     /// <summary>

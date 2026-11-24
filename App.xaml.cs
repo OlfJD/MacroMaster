@@ -70,15 +70,33 @@ public partial class App : System.Windows.Application
         _instance.ListenForShowRequests(() => Dispatcher.BeginInvoke(window.ShowFromAnotherLaunch));
     }
 
+    private static int _errorBoxOpen;
+
     private static void LogCrash(Exception? ex)
     {
         if (ex == null) return;
+        string crashPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
+        bool logged;
         try
         {
-            string crashPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "crash.log");
             File.AppendAllText(crashPath, $"[{DateTime.Now}] UNHANDLED EXCEPTION:\n{ex}\n\n");
-            System.Windows.MessageBox.Show($"MacroMaster encountered an error:\n\n{ex.Message}\n\nCheck crash.log for details.", "MacroMaster Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            logged = true;
+        }
+        catch
+        {
+            logged = false; // e.g. installed where it may not write: still say what happened
+            Core.AppLog.Error("unhandled exception", ex);
+        }
+
+        // One box at a time: an error that repeats (a timer) used to stack a new box on every tick
+        if (Interlocked.Exchange(ref _errorBoxOpen, 1) == 1) return;
+        try
+        {
+            System.Windows.MessageBox.Show($"MacroMaster encountered an error:\n\n{ex.Message}\n\n" +
+                                           (logged ? $"Details are in {crashPath}" : "Details are in errors.log in MacroMaster's data folder."),
+                                           "MacroMaster Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
         catch { }
+        finally { Volatile.Write(ref _errorBoxOpen, 0); }
     }
 }

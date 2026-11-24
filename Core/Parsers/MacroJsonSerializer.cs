@@ -31,17 +31,32 @@ public static class MacroJsonSerializer
 
     /// <summary>
     /// Writes to a temp file first and then swaps it in, so a crash or power cut mid-save
-    /// can never leave a half-written (unreadable) profiles file behind.
+    /// can never leave a half-written (unreadable) profiles file behind. A file another program has
+    /// open for a moment (virus scanner, OneDrive, a backup tool) is tried again a few times; after
+    /// that the IOException / UnauthorizedAccessException goes to the caller.
     /// </summary>
     private static void WriteAtomic(string filePath, string contents)
     {
         string tmp = filePath + ".tmp";
-        File.WriteAllText(tmp, contents);
-        if (File.Exists(filePath))
-            File.Replace(tmp, filePath, filePath + ".bak", ignoreMetadataErrors: true);
-        else
-            File.Move(tmp, filePath);
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                File.WriteAllText(tmp, contents);
+                if (File.Exists(filePath))
+                    File.Replace(tmp, filePath, filePath + ".bak", ignoreMetadataErrors: true);
+                else
+                    File.Move(tmp, filePath);
+                return;
+            }
+            catch (Exception ex) when ((ex is IOException or UnauthorizedAccessException) && attempt < SaveAttempts)
+            {
+                Thread.Sleep(100);
+            }
+        }
     }
+
+    private const int SaveAttempts = 4;
 
     public static void SaveProfiles(List<MacroProfile> profiles, string filePath)
         => WriteAtomic(filePath, JsonSerializer.Serialize(profiles, Options));
