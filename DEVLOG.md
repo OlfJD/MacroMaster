@@ -280,3 +280,7 @@ From the Blur-AutoClicker study (`docs/blur-autoclicker-study.md`, recommendatio
 - **1 ms timer only while running**: `timeBeginPeriod(1)` was held from start-up to exit, also idle in the tray. Each run now asks for it and gives it back (`BeginPreciseTiming` / `EndPreciseTiming` in `MacroEngine.StartRun`). Benchmark: loop timing at 10 / 50 / 100 CPS is the same with and without it.
 - **Foreground app** (`ProcessWatcher`, `ForegroundNameCache`): the name was cached per process id forever; a process id Windows gave to another program could keep the old name. Now per window and process id, for one second at most, read with `QueryFullProcessImageName`. Tests: `ProcessWatcherTests`.
 - Tests: 97 → 116.
+
+### Version 2.7.7 - README in the SoundSwitcher style (2026-11-24) — app version 1.3.1
+- **README header like SoundSwitcher's**: centred app icon, name, tagline, download link and the main screenshot; then "How it works" (new macro, profiles, F12, tray), the feature list, more screenshots folded away, requirements and building. The shortcuts table went into "How it works".
+- **Framed screenshots**: `docs/frame_screenshots.ps1` gives each PNG in `docs/screenshots` rounded corners, a thin light edge (so the dark window stands out on GitHub's dark theme) and a soft shadow on a transparent background, like a window on the Windows 11 desktop. Pixels inside are untouched. It skips images that are already framed, so run it again after retaking a screenshot with `PrintWindow`.
