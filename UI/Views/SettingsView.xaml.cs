@@ -176,6 +176,13 @@ public partial class SettingsView : System.Windows.Controls.UserControl
         UpdateStartAsAdminRow();
         ChkAutoUpdate.IsChecked = _settings.AutoUpdate;
         TxtUpdateHint.Text = $"You have version {AppUpdater.CurrentVersion.ToString(3)}. New versions from GitHub are installed quietly in the background.";
+        if (AppUpdater.IsDevBuild)
+        {
+            // A Debug build never touches the Windows start entry or updates itself (see MainWindow.SyncAutostart):
+            // say so, instead of switches that silently do nothing
+            TxtStartHint.Text = "Development build: this is saved, but only the installed copy changes the Windows start entry.";
+            TxtUpdateHint.Text = $"Version {AppUpdater.CurrentVersion.ToString(3)}, development build: it never updates itself.";
+        }
         ChkMinimizeToTray.IsChecked = _settings.MinimizeToTray;
         ChkCloseToTray.IsChecked = _settings.CloseToTray;
     }

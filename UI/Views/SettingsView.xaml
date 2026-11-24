@@ -229,7 +229,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="0,0,16,0">
                                 <TextBlock Text="Start with Windows" Style="{StaticResource RowTitle}"/>
-                                <TextBlock Text="Launches quietly in the tray when you sign in." Style="{StaticResource Hint}"/>
+                                <TextBlock x:Name="TxtStartHint" Text="Launches quietly in the tray when you sign in." Style="{StaticResource Hint}"/>
                             </StackPanel>
                             <CheckBox x:Name="ChkStartWithWindows" Grid.Column="1" Style="{StaticResource Switch}" Checked="ChkStartWithWindows_Changed" Unchecked="ChkStartWithWindows_Changed"
                                       AutomationProperties.Name="Start with Windows"/>
