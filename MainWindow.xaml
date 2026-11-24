@@ -103,9 +103,8 @@
                                     <controls:AppIcon x:Name="ProfileIcon" IconKey="{Binding IconKey}" Size="16" Margin="0,0,10,0"/>
                                     <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                         <TextBlock x:Name="ProfileName" Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock x:Name="ProfileState" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0">
-                                            <Run Text="{Binding Macros.Count, Mode=OneWay}"/><Run Text=" macros"/>
-                                        </TextBlock>
+                                        <TextBlock x:Name="ProfileState" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,1,0,0"
+                                                   Text="{Binding Macros.Count, Mode=OneWay, Converter={StaticResource MacroCount}}"/>
                                     </StackPanel>
                                     <CheckBox x:Name="ProfileSwitch" Grid.Column="2" Style="{StaticResource Switch}" Margin="8,0,0,0"
                                               IsChecked="{Binding IsOn, Mode=OneWay}" Checked="ProfileSwitch_Changed" Unchecked="ProfileSwitch_Changed"

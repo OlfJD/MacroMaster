@@ -121,6 +121,7 @@
     <conv:TriggerKeysConverter x:Key="TriggerKeys"/>
     <conv:ModeLabelConverter x:Key="ModeLabel"/>
     <conv:StepCountConverter x:Key="StepCount"/>
+    <conv:MacroCountConverter x:Key="MacroCount"/>
     <conv:ModeIconConverter x:Key="ModeIcon"/>
     <conv:ProcessLabelConverter x:Key="ProcessLabel"/>
     <conv:IsGlobalProcessConverter x:Key="IsGlobalProcess"/>

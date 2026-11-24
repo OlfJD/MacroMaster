@@ -46,6 +46,15 @@ public sealed class StepCountConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
 }
 
+/// <summary>1 → "1 macro", 3 → "3 macros" (profile tiles in the sidebar).</summary>
+public sealed class MacroCountConverter : IValueConverter
+{
+    public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        => value is int n ? (n == 1 ? "1 macro" : $"{n} macros") : string.Empty;
+
+    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) => Binding.DoNothing;
+}
+
 public sealed class ModeIconConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)

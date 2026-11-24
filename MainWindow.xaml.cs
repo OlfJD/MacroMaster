@@ -9,7 +9,6 @@ using MacroMaster.Core.Engine;
 using MacroMaster.Core.Models;
 using MacroMaster.Core.Native;
 using MacroMaster.Core.Parsers;
-using MacroMaster.Core.Presets;
 using MacroMaster.UI;
 using MacroMaster.UI.Views;
 using MacroMaster.UI.Windows;
@@ -194,7 +193,9 @@ public partial class MainWindow : Window
         bool firstRun = profiles == null || profiles.Count == 0;
         if (firstRun)
         {
-            profiles = DefaultPresets.CreateDefaultProfiles();
+            // A new user starts with an empty list: no sample profiles or macros. The first profile is
+            // made when the first macro is (EnsureProfile).
+            profiles = new List<MacroProfile>();
             settings.DataVersion = AppSettings.CurrentDataVersion;
         }
         MigrateData(settings, profiles!);
@@ -422,9 +423,9 @@ public partial class MainWindow : Window
         int enabled = profile?.Macros.Count(m => m.IsEnabled) ?? 0;
         bool profileOn = profile?.IsOn == true;
 
-        TxtProfileTitle.Text = profile?.Name ?? "No profile";
-        TxtProfileSubtitle.Text = total == 0
-            ? "No macros in this profile"
+        TxtProfileTitle.Text = profile?.Name ?? "Your macros";
+        TxtProfileSubtitle.Text = profile == null ? "Nothing here yet"
+            : total == 0 ? "No macros in this profile"
             : $"{total} macro{(total == 1 ? "" : "s")} · {enabled} enabled" + (profileOn ? "" : " · profile off");
         ProfileOffBanner.Visibility = profile != null && !profileOn ? Visibility.Visible : Visibility.Collapsed;
 
@@ -719,7 +720,10 @@ public partial class MainWindow : Window
     /// </summary>
     private void OpenEditor(MacroDefinition? existing)
     {
-        if (IsEditorOpen || _engine.SelectedProfile is not { } profile) return;
+        if (IsEditorOpen) return;
+        // On a blank start there is no profile yet: the first one is made once this macro is saved
+        var profile = _engine.SelectedProfile ?? (existing == null ? NewFirstProfile() : null);
+        if (profile == null) return;
 
         var editor = new MacroEditorView(existing, AllMacros(), profile);
         editor.Finished += saved =>
@@ -729,6 +733,7 @@ public partial class MainWindow : Window
             if (!saved) return;
             if (existing == null)
             {
+                if (!_engine.Profiles.Contains(profile)) AddFirstProfile(profile);
                 profile.Macros.Add(editor.Macro);
             }
             else
@@ -746,6 +751,26 @@ public partial class MainWindow : Window
         };
 
         ShowPage(editor);
+    }
+
+    /// <summary>The profile a new user's first macro goes into (there are no sample profiles).</summary>
+    private static MacroProfile NewFirstProfile() => new() { Name = "My macros", IconKey = "layers", IsActive = true, IsOn = true };
+
+    private void AddFirstProfile(MacroProfile profile)
+    {
+        _engine.Profiles.Add(profile);
+        ActivateProfile(profile);
+        RefreshProfiles();
+        RefreshMacrosList();
+    }
+
+    /// <summary>The profile on screen; on a blank start the first one is made now (importing macros needs one).</summary>
+    private MacroProfile EnsureProfile()
+    {
+        if (_engine.SelectedProfile is { } shown) return shown;
+        var first = NewFirstProfile();
+        AddFirstProfile(first);
+        return first;
     }
 
     private static void FadeIn(UIElement element) =>
@@ -1019,13 +1044,15 @@ public partial class MainWindow : Window
 
     private int ImportAhkFiles(IEnumerable<string> files)
     {
-        if (_engine.SelectedProfile == null) return 0;
+        var scripts = files.Where(f => f.EndsWith(".ahk", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (scripts.Count == 0) return 0;
+        var into = EnsureProfile();
         int count = 0;
-        foreach (var file in files.Where(f => f.EndsWith(".ahk", StringComparison.OrdinalIgnoreCase)))
+        foreach (var file in scripts)
         {
             foreach (var m in AhkScriptParser.ParseAhkFile(file))
             {
-                _engine.SelectedProfile.Macros.Add(m);
+                into.Macros.Add(m);
                 count++;
             }
         }
@@ -1073,8 +1100,9 @@ public partial class MainWindow : Window
                 // A .json file is either exported macros (added to the profile on screen) or whole profiles
                 var kind = MacroJsonSerializer.DetectImportKind(file);
                 if (kind == MacroJsonSerializer.ImportKind.Unknown) throw new InvalidDataException("This isn't a MacroMaster macro or profile file.");
-                if (kind == MacroJsonSerializer.ImportKind.Macros && _engine.SelectedProfile is { } into)
+                if (kind == MacroJsonSerializer.ImportKind.Macros)
                 {
+                    var into = EnsureProfile();
                     foreach (var macro in MacroJsonSerializer.ImportMacros(file))
                     {
                         // The first mode of a group that doesn't exist here yet becomes its active one
