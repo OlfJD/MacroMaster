@@ -126,7 +126,7 @@
                             <TextBlock Text="Position" Style="{StaticResource RowTitle}" VerticalAlignment="Center"/>
                             <Button x:Name="BtnPlaceHud" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Place it…" VerticalAlignment="Center" Margin="0,0,8,0"
                                     Click="BtnPlaceHud_Click" Visibility="Collapsed" ToolTip="Drag a stand-in to the spot you want"/>
-                            <ComboBox x:Name="CmbHudPosition" Grid.Column="2" Width="208" SelectionChanged="CmbHudPosition_SelectionChanged"/>
+                            <ComboBox x:Name="CmbHudPosition" Grid.Column="2" Width="208" AutomationProperties.Name="Notification position" SelectionChanged="CmbHudPosition_SelectionChanged"/>
                         </Grid>
 
                         <Border Style="{StaticResource RowDivider}"/>
@@ -172,7 +172,7 @@
                             <TextBlock Text="Indicator position" Style="{StaticResource RowTitle}" VerticalAlignment="Center"/>
                             <Button x:Name="BtnPlaceIndicator" Grid.Column="1" Style="{StaticResource SecondaryButton}" Content="Place it…" VerticalAlignment="Center" Margin="0,0,8,0"
                                     Click="BtnPlaceIndicator_Click" Visibility="Collapsed" ToolTip="Drag a stand-in to the spot you want"/>
-                            <ComboBox x:Name="CmbIndicatorPosition" Grid.Column="2" Width="208" SelectionChanged="CmbIndicatorPosition_SelectionChanged"/>
+                            <ComboBox x:Name="CmbIndicatorPosition" Grid.Column="2" Width="208" AutomationProperties.Name="Indicator position" SelectionChanged="CmbIndicatorPosition_SelectionChanged"/>
                         </Grid>
                     </StackPanel>
                 </controls:SmoothBorder>
@@ -213,7 +213,7 @@
                             <TextBlock x:Name="TxtUiScaleHint" Style="{StaticResource Hint}"
                                        Text="Auto grows the interface with bigger screens, so it looks the same on 1080p, 1440p and 4K."/>
                         </StackPanel>
-                        <ComboBox x:Name="CmbUiScale" Grid.Column="1" Width="208" VerticalAlignment="Center"/>
+                        <ComboBox x:Name="CmbUiScale" Grid.Column="1" Width="208" VerticalAlignment="Center" AutomationProperties.Name="Interface size"/>
                     </Grid>
                     </StackPanel>
                 </controls:SmoothBorder>
@@ -231,7 +231,8 @@
                                 <TextBlock Text="Start with Windows" Style="{StaticResource RowTitle}"/>
                                 <TextBlock Text="Launches quietly in the tray when you sign in." Style="{StaticResource Hint}"/>
                             </StackPanel>
-                            <CheckBox x:Name="ChkStartWithWindows" Grid.Column="1" Style="{StaticResource Switch}" Checked="ChkStartWithWindows_Changed" Unchecked="ChkStartWithWindows_Changed"/>
+                            <CheckBox x:Name="ChkStartWithWindows" Grid.Column="1" Style="{StaticResource Switch}" Checked="ChkStartWithWindows_Changed" Unchecked="ChkStartWithWindows_Changed"
+                                      AutomationProperties.Name="Start with Windows"/>
                         </Grid>
 
                         <Grid x:Name="StartAsAdminRow" Margin="0,12,0,0"
@@ -258,7 +259,7 @@
                                 <TextBlock Text="Minimize to tray" Style="{StaticResource RowTitle}"/>
                                 <TextBlock Text="The minimize button hides the window instead of using the taskbar." Style="{StaticResource Hint}"/>
                             </StackPanel>
-                            <CheckBox x:Name="ChkMinimizeToTray" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True"/>
+                            <CheckBox x:Name="ChkMinimizeToTray" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True" AutomationProperties.Name="Minimize to tray"/>
                         </Grid>
 
                         <Border Style="{StaticResource RowDivider}"/>
@@ -272,7 +273,7 @@
                                 <TextBlock Text="Keep running when closed" Style="{StaticResource RowTitle}"/>
                                 <TextBlock Text="Closing the window keeps hotkeys active from the tray." Style="{StaticResource Hint}"/>
                             </StackPanel>
-                            <CheckBox x:Name="ChkCloseToTray" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True"/>
+                            <CheckBox x:Name="ChkCloseToTray" Grid.Column="1" Style="{StaticResource Switch}" IsChecked="True" AutomationProperties.Name="Keep running when closed"/>
                         </Grid>
 
                         <Border Style="{StaticResource RowDivider}"/>

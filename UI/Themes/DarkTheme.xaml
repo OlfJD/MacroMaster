@@ -1051,6 +1051,8 @@
 
     <!-- Sidebar profile item -->
     <Style x:Key="NavItem" TargetType="{x:Type ListBoxItem}">
+        <!-- Screen readers read the profile's name, not "MacroMaster.Core.Models.MacroProfile" -->
+        <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}"/>
@@ -1087,6 +1089,7 @@
          cards sit one step lighter; the group itself is outlined, and its live mode has a small dot
          before the name (in the item template). -->
     <Style x:Key="MacroRow" TargetType="{x:Type ListBoxItem}">
+        <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>

@@ -327,7 +327,8 @@
                                     </Grid.ColumnDefinitions>
 
                                     <CheckBox x:Name="EnableSwitch" Style="{StaticResource Switch}" IsChecked="{Binding IsEnabled}"
-                                              Checked="MacroEnable_Changed" Unchecked="MacroEnable_Changed" ToolTip="Enable or disable this macro"/>
+                                              Checked="MacroEnable_Changed" Unchecked="MacroEnable_Changed" ToolTip="Enable or disable this macro"
+                                              AutomationProperties.Name="{Binding Name, StringFormat='{}{0} on/off'}"/>
 
                                     <!-- Name / description -->
                                     <StackPanel x:Name="InfoPanel" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
@@ -477,13 +478,13 @@
 
         <!-- Caption buttons: last in row 0 so they stay on top of both pages -->
         <StackPanel Grid.Column="1" Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top">
-            <Button Style="{StaticResource CaptionButton}" Click="MinimizeBtn_Click" ToolTip="Minimize">
+            <Button Style="{StaticResource CaptionButton}" Click="MinimizeBtn_Click" ToolTip="Minimize" AutomationProperties.Name="Minimize">
                 <controls:AppIcon IconKey="minus" Size="10"/>
             </Button>
-            <Button Style="{StaticResource CaptionButton}" Click="MaximizeBtn_Click">
+            <Button x:Name="MaximizeBtn" Style="{StaticResource CaptionButton}" Click="MaximizeBtn_Click" ToolTip="Maximize" AutomationProperties.Name="Maximize">
                 <controls:AppIcon x:Name="MaximizeIcon" IconKey="maximize" Size="10"/>
             </Button>
-            <Button Style="{StaticResource CloseCaptionButton}" Click="CloseBtn_Click" ToolTip="Close">
+            <Button Style="{StaticResource CloseCaptionButton}" Click="CloseBtn_Click" ToolTip="Close" AutomationProperties.Name="Close">
                 <controls:AppIcon IconKey="x" Size="10"/>
             </Button>
         </StackPanel>

@@ -44,7 +44,13 @@ public partial class MainWindow : Window
         UiScale.Preference = early.UiScalePercent;
         AccentTheme.Apply(early.AccentColor);
         SourceInitialized += (_, _) => InitUiScale();
-        StateChanged += (_, _) => MaximizeIcon.IconKey = WindowState == WindowState.Maximized ? "restore" : "maximize";
+        StateChanged += (_, _) =>
+        {
+            bool max = WindowState == WindowState.Maximized;
+            MaximizeIcon.IconKey = max ? "restore" : "maximize";
+            MaximizeBtn.ToolTip = max ? "Restore" : "Maximize";
+            System.Windows.Automation.AutomationProperties.SetName(MaximizeBtn, max ? "Restore" : "Maximize");
+        };
 
         Loaded += MainWindow_Loaded;
         Closing += MainWindow_Closing;
