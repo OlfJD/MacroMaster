@@ -182,7 +182,7 @@ public partial class MainWindow : Window
         if (_started) return; // shown later from the tray: Loaded fires then, everything already runs
         _started = true;
 
-        var settings = MacroJsonSerializer.LoadSettings(_settingsFilePath, out bool settingsFromFile);
+        var settings = MacroJsonSerializer.LoadSettings(_settingsFilePath, out bool settingsFromFile, out bool settingsFromBackup);
         var load = MacroJsonSerializer.LoadProfiles(_profilesFilePath);
         var profiles = load.Profiles;
         bool firstRun = profiles == null || profiles.Count == 0;
@@ -217,9 +217,12 @@ public partial class MainWindow : Window
         // A copy on its own data folder (MACROMASTER_DATA_DIR, for trying things out) must not touch the
         // Windows start entry or update the app: both are shared with the real installation.
         bool sandbox = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("MACROMASTER_DATA_DIR"));
-        // Only with the user's own settings: if the file couldn't be read these are the defaults
-        // ("Start with Windows" off), and syncing them would delete the start entry.
-        if (!sandbox && settingsFromFile) SyncAutostart(mayAskForPermission: false);
+        // Only with the user's own, current settings: if the file couldn't be read these are the
+        // defaults ("Start with Windows" off), or the backup, which is one save behind (it can still
+        // say "off" right after the user switched it on). Syncing either could delete the start entry.
+        if (!sandbox && settingsFromFile && !settingsFromBackup) SyncAutostart(mayAskForPermission: false);
+        else if (!sandbox) AutoStartManager.Log($"start-up sync skipped: settings.json {(File.Exists(_settingsFilePath) ? "unreadable" : "not there yet")}, " +
+                                                $"using {(settingsFromBackup ? "settings.json.bak" : "defaults")}");
         if (!sandbox) AppUpdater.Start(_engine,
             userBusy: () => IsEditorOpen || IsActive,
             windowShown: () => IsVisible && WindowState != WindowState.Minimized,

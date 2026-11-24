@@ -229,15 +229,19 @@ public static class MacroJsonSerializer
         return copy;
     }
 
-    public static AppSettings LoadSettings(string filePath) => LoadSettings(filePath, out _);
+    public static AppSettings LoadSettings(string filePath) => LoadSettings(filePath, out _, out _);
+
+    public static AppSettings LoadSettings(string filePath, out bool fromFile) => LoadSettings(filePath, out fromFile, out _);
 
     /// <summary>
     /// Loads the settings; an unreadable file falls back to the last good copy (.bak).
     /// <paramref name="fromFile"/> is false when neither could be read and these are the defaults.
     /// Defaults must never be acted on as if the user chose them: "Start with Windows" defaults to
-    /// off, and syncing that removed the user's start entry.
+    /// off, and syncing that removed the user's start entry. <paramref name="fromBackup"/>: the .bak
+    /// was used. It is one save behind (right after switching "Start with Windows" on it still says
+    /// off), so it is good for restoring the user's settings but must not change Windows either.
     /// </summary>
-    public static AppSettings LoadSettings(string filePath, out bool fromFile)
+    public static AppSettings LoadSettings(string filePath, out bool fromFile, out bool fromBackup)
     {
         foreach (string path in new[] { filePath, filePath + ".bak" })
         {
@@ -249,6 +253,7 @@ public static class MacroJsonSerializer
                     var settings = JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(path), Options);
                     if (settings == null) break;
                     fromFile = true;
+                    fromBackup = path != filePath;
                     return settings;
                 }
                 catch (IOException) { Thread.Sleep(150); } // being written right now (e.g. the previous copy quitting)
@@ -256,6 +261,7 @@ public static class MacroJsonSerializer
             }
         }
         fromFile = false;
+        fromBackup = false;
         return new AppSettings();
     }
 }

@@ -100,8 +100,20 @@ public static class AutoStartManager
     {
         var outcome = SyncCore(enable, asAdmin, mayAskForPermission);
         Log($"sync: start with Windows={enable}, as admin={asAdmin}, may ask={mayAskForPermission}, elevated={IsElevated} -> {outcome}" +
-            $" (start entry {(IsRunKeySet() ? "set" : "not set")})");
+            $" (start entry {(IsRunKeySet() ? "set" : "not set")}, task {DescribeTask()})");
         return outcome;
+    }
+
+    /// <summary>For the log: whether the administrator start is there, so a sign-in that started nothing can be traced.</summary>
+    private static string DescribeTask()
+    {
+        try
+        {
+            if (QueryTaskXml() is { } xml)
+                return xml.Contains("HighestAvailable", StringComparison.OrdinalIgnoreCase) ? "there (as administrator)" : "there";
+            return GetTaskMarker() is { } marker ? $"not readable from here, marker says {marker}" : "not there";
+        }
+        catch (Exception ex) { return $"unknown ({ex.GetType().Name})"; }
     }
 
     private static Outcome SyncCore(bool enable, bool asAdmin, bool mayAskForPermission)
