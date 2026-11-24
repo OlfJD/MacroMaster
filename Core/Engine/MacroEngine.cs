@@ -575,6 +575,13 @@ public class MacroEngine : IDisposable
         Task.Factory.StartNew(() =>
         {
             try { body(); }
+            catch (InputBlockedException)
+            {
+                // Lock screen, UAC prompt, a program blocking input, often an administrator window:
+                // nothing would reach the app, so say so instead of "running" on without effect
+                AppLog.Error($"macro \"{macro.Name}\" stopped: Windows refused its input");
+                TriggerHud(macro.Name, "Stopped: Windows blocked its input", "octagon-x", Warning);
+            }
             catch (Exception ex)
             {
                 AppLog.Error($"macro \"{macro.Name}\" stopped on an error", ex);

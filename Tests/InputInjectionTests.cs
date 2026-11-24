@@ -1,7 +1,72 @@
+using MacroMaster.Core.Models;
 using MacroMaster.Core.Native;
 using Xunit;
+using static MacroMaster.Tests.EngineHarness;
 
 namespace MacroMaster.Tests;
+
+/// <summary>Windows refusing a macro's input (lock screen, UAC, administrator window).</summary>
+public class RefusedInputTests
+{
+    [Fact]
+    public void A_loop_stops_and_says_so_when_Windows_refuses_its_input()
+    {
+        var clicker = Macro("Clicker", "F6", ExecutionMode.Toggle, actions: new[]
+        {
+            new MacroAction { Type = ActionType.MouseClick, MouseButton = MouseButtonType.Left, DelayMs = 2 },
+            Wait(5)
+        });
+        using var h = new EngineHarness(Profile("P", Array.Empty<string>(), clicker));
+        h.Tap(F6);
+        Assert.True(WaitFor(() => h.Sim.Count("mouse down Left") >= 3));
+
+        h.Sim.RefuseInput = true; // e.g. the PC was locked
+
+        Assert.True(WaitFor(() => !clicker.IsRunning));
+        Assert.Contains("Clicker | Stopped: Windows blocked its input", h.Hud);
+        Assert.DoesNotContain(h.Hud, s => s.Contains("Stopped on an error"));
+
+        // Unlocked again: the hotkey starts it as usual
+        h.Sim.RefuseInput = false;
+        int before = h.Sim.Count("mouse down Left");
+        h.Tap(F6);
+        Assert.True(WaitFor(() => h.Sim.Count("mouse down Left") > before));
+        h.Tap(F6);
+    }
+
+    [Fact]
+    public void A_refused_press_is_not_taken_for_a_held_key()
+    {
+        // Nothing went down, so nothing may be "released" later (the player may hold S themselves)
+        var walk = Macro("Walk", "l", actions: new MacroAction { Type = ActionType.KeyDown, Key = "S" });
+        using var h = new EngineHarness(Profile("P", Array.Empty<string>(), walk));
+        h.Sim.RefuseInput = true;
+
+        h.Tap(L);
+        Assert.True(WaitFor(() => h.Hud.Contains("Walk | Stopped: Windows blocked its input")));
+
+        h.Sim.RefuseInput = false;
+        h.Engine.SetMasterEngineEnabled(false); // releases everything still held
+        Thread.Sleep(50);
+        Assert.Equal(0, h.Sim.Count("key up S"));
+    }
+
+    [Theory]
+    [InlineData(1920)]
+    [InlineData(2560)]
+    [InlineData(4480)] // two monitors side by side
+    [InlineData(3840)]
+    public void Every_pixel_maps_to_an_absolute_position_that_lands_on_it(int size)
+    {
+        // Windows: pixel = value * size / 65536, fraction dropped
+        for (int pixel = 0; pixel < size; pixel++)
+        {
+            int value = InputSimulator.ToAbsolute(pixel, size);
+            Assert.InRange(value, 0, 65535);
+            Assert.Equal(pixel, (int)((long)value * size / 65536));
+        }
+    }
+}
 
 /// <summary>What we hand to Windows for a key press (built, not sent: nothing reaches the PC).</summary>
 public class InputInjectionTests

@@ -18,13 +18,18 @@ internal sealed class RecordingSimulator : InputSimulator
     /// </summary>
     public Action<string>? BeforeSend { get; set; }
 
-    private void Record(string what)
+    /// <summary>Pretend Windows refuses every event from now on (lock screen, administrator window…).</summary>
+    public volatile bool RefuseInput;
+
+    private bool Record(string what)
     {
         BeforeSend?.Invoke(what);
+        if (RefuseInput) return false;
         Sent.Enqueue(what);
+        return true;
     }
 
-    protected override void SendKeyboardInput(ushort vkCode, bool isKeyUp)
+    protected override bool SendKeyboardInput(ushort vkCode, bool isKeyUp)
         => Record($"key {(isKeyUp ? "up" : "down")} {KeyHelper.VkToString(vkCode)}");
 
     /// <summary>What the fake screen shows at a position (0xRRGGBB). Black everywhere by default.</summary>
@@ -32,14 +37,12 @@ internal sealed class RecordingSimulator : InputSimulator
 
     public override int ReadPixel(int x, int y) => Screen(x, y);
 
-    protected override void SetPointerPosition(int x, int y) => Sent.Enqueue($"mouse to {x},{y}");
+    protected override bool SetPointerPosition(int x, int y) => Record($"mouse to {x},{y}");
 
-    protected override void SendUnicodeInput(char c, bool isKeyUp)
-    {
-        if (!isKeyUp) Sent.Enqueue($"char {c}");
-    }
+    protected override bool SendUnicodeInput(char c, bool isKeyUp)
+        => isKeyUp ? !RefuseInput : Record($"char {c}");
 
-    protected override void SendMouseEvent(uint flags, int dx, int dy, uint data) => Record(flags switch
+    protected override bool SendMouseEvent(uint flags, int dx, int dy, uint data) => Record(flags switch
     {
         Win32Api.MOUSEEVENTF_LEFTDOWN => "mouse down Left",
         Win32Api.MOUSEEVENTF_LEFTUP => "mouse up Left",

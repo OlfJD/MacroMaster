@@ -23,11 +23,17 @@ public class InputSimulator : IDisposable
         }
     }
 
+    /// <summary>A press, click or move Windows refused ends the macro's run (see <see cref="InputBlockedException"/>).</summary>
+    private static void Require(bool accepted)
+    {
+        if (!accepted) throw new InputBlockedException();
+    }
+
     public void KeyDown(string key)
     {
         int vk = KeyHelper.NormalizeToVk(key);
         if (vk == 0) return;
-        SendKeyboardInput((ushort)vk, false);
+        Require(SendKeyboardInput((ushort)vk, false));
         // Noted only once it's sent: a ReleaseAllInputs on another thread at this very moment either
         // sees it and lets go, or the macro's run lets go of it when it ends. Noted first, it could be
         // "released" before it was even pressed, and stay held for good.
@@ -68,7 +74,7 @@ public class InputSimulator : IDisposable
             _ => 0
         };
 
-        SendMouseEvent(flag, 0, 0, data);
+        Require(SendMouseEvent(flag, 0, 0, data));
         _heldMouseButtons[button] = 0; // after sending, see KeyDown
     }
 
@@ -129,14 +135,37 @@ public class InputSimulator : IDisposable
 
     public void MouseMoveRelative(int dx, int dy)
     {
-        // Direct hardware-level mouse event (identical to DllCall("mouse_event", 1, dx, dy) in AHK)
-        SendMouseEvent(Win32Api.MOUSEEVENTF_MOVE, dx, dy, 0);
+        // A relative move, like the mouse itself sends (what DllCall("mouse_event", 1, dx, dy) does in AHK)
+        Require(SendMouseEvent(Win32Api.MOUSEEVENTF_MOVE, dx, dy, 0));
     }
 
     /// <summary>Puts the pointer on an exact screen position (pixels from the top-left of the main screen).</summary>
-    public void MouseMoveTo(int x, int y) => SetPointerPosition(x, y);
+    public void MouseMoveTo(int x, int y) => Require(SetPointerPosition(x, y));
 
-    protected virtual void SetPointerPosition(int x, int y) => SetCursorPos(x, y);
+    /// <summary>
+    /// An absolute move through SendInput, like a tablet would send, rather than SetCursorPos: it goes
+    /// through the input stream (games that read raw input see it too) and Windows says whether it
+    /// took it. The position is given in 0…65535 across all monitors.
+    /// </summary>
+    protected virtual bool SetPointerPosition(int x, int y)
+    {
+        int left = GetSystemMetrics(SM_XVIRTUALSCREEN), top = GetSystemMetrics(SM_YVIRTUALSCREEN);
+        int width = GetSystemMetrics(SM_CXVIRTUALSCREEN), height = GetSystemMetrics(SM_CYVIRTUALSCREEN);
+        if (width <= 0 || height <= 0) return SetCursorPos(x, y);
+
+        return SendMouseEvent(Win32Api.MOUSEEVENTF_MOVE | Win32Api.MOUSEEVENTF_ABSOLUTE | Win32Api.MOUSEEVENTF_VIRTUALDESK,
+                              ToAbsolute(x - left, width), ToAbsolute(y - top, height), 0);
+    }
+
+    /// <summary>
+    /// Pixel → 0…65535. Windows turns the value back into pixel = value × size / 65536 and drops the
+    /// fraction, so this rounds up to land on exactly that pixel.
+    /// </summary>
+    internal static int ToAbsolute(int pixel, int size)
+        => (int)Math.Clamp(((long)pixel * 65536 + size - 1) / size, 0, 65535);
+
+    private const int SM_XVIRTUALSCREEN = 76, SM_YVIRTUALSCREEN = 77, SM_CXVIRTUALSCREEN = 78, SM_CYVIRTUALSCREEN = 79;
+    [DllImport("user32.dll")] private static extern int GetSystemMetrics(int index);
 
     /// <summary>Colour of one screen pixel as 0xRRGGBB, or -1 if Windows wouldn't say.</summary>
     public virtual int ReadPixel(int x, int y) => ReadScreenPixel(x, y);
@@ -161,7 +190,7 @@ public class InputSimulator : IDisposable
 
     public void MouseScroll(int delta)
     {
-        SendMouseEvent(Win32Api.MOUSEEVENTF_WHEEL, 0, 0, (uint)delta);
+        Require(SendMouseEvent(Win32Api.MOUSEEVENTF_WHEEL, 0, 0, (uint)delta));
     }
 
     public void SendMediaCommand(string command)
@@ -180,7 +209,7 @@ public class InputSimulator : IDisposable
 
         if (vk != 0)
         {
-            SendKeyboardInput((ushort)vk, false);
+            Require(SendKeyboardInput((ushort)vk, false));
             PreciseSleep(20);
             SendKeyboardInput((ushort)vk, true);
         }
@@ -201,19 +230,19 @@ public class InputSimulator : IDisposable
 
             if (c == '\n')
             {
-                SendKeyboardInput(0x0D, false);
+                Require(SendKeyboardInput(0x0D, false));
                 SendKeyboardInput(0x0D, true);
             }
             else
             {
-                SendUnicodeInput(c, false);
+                Require(SendUnicodeInput(c, false));
                 SendUnicodeInput(c, true);
             }
             PreciseSleep(6, token);
         }
     }
 
-    protected virtual void SendUnicodeInput(char c, bool isKeyUp)
+    protected virtual bool SendUnicodeInput(char c, bool isKeyUp)
     {
         var input = new Win32Api.INPUT
         {
@@ -231,7 +260,7 @@ public class InputSimulator : IDisposable
             }
         };
 
-        Win32Api.SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Win32Api.INPUT)));
+        return Send(input);
     }
 
     /// <summary>Releases every key and mouse button this simulator is still holding down.</summary>
@@ -248,20 +277,38 @@ public class InputSimulator : IDisposable
         }
     }
 
-    /// <summary>The three Send* methods are the only places that touch the real keyboard and mouse; tests override them to record instead.</summary>
-    protected virtual void SendMouseEvent(uint flags, int dx, int dy, uint data)
-        => Win32Api.mouse_event(flags, dx, dy, data, UIntPtr.Zero);
+    /// <summary>
+    /// The Send* methods and <see cref="SetPointerPosition"/> are the only places that touch the real
+    /// keyboard and mouse; tests override them to record instead. Each returns whether Windows took
+    /// the event.
+    /// </summary>
+    protected virtual bool SendMouseEvent(uint flags, int dx, int dy, uint data)
+    {
+        // SendInput instead of the old mouse_event: same event, but Windows says whether it took it
+        var input = new Win32Api.INPUT
+        {
+            type = Win32Api.INPUT_MOUSE,
+            u = new Win32Api.InputUnion
+            {
+                mi = new Win32Api.MOUSEINPUT { dx = dx, dy = dy, mouseData = data, dwFlags = flags, time = 0, dwExtraInfo = UIntPtr.Zero }
+            }
+        };
+        return Send(input);
+    }
 
-    protected virtual void SendKeyboardInput(ushort vkCode, bool isKeyUp)
+    protected virtual bool SendKeyboardInput(ushort vkCode, bool isKeyUp)
     {
         var input = new Win32Api.INPUT
         {
             type = Win32Api.INPUT_KEYBOARD,
             u = new Win32Api.InputUnion { ki = KeyEvent(vkCode, isKeyUp) }
         };
-
-        Win32Api.SendInput(1, new[] { input }, Marshal.SizeOf(typeof(Win32Api.INPUT)));
+        return Send(input);
     }
+
+    private static readonly int InputSize = Marshal.SizeOf<Win32Api.INPUT>();
+
+    private static bool Send(Win32Api.INPUT input) => Win32Api.SendInput(1, new[] { input }, InputSize) == 1;
 
     private const uint MAPVK_VK_TO_VSC_EX = 4;
 
