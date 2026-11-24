@@ -27,13 +27,16 @@ public class ReleaseAfterRunTests
     [Fact]
     public void Keys_the_macro_already_released_are_not_released_twice()
     {
-        var steps = Macro("Sprint jump", "l", ExecutionMode.Once,
-            actions: new[] { KeyDown("LShift"), KeyDown("Space"), KeyUp("space"), RightDown() }).Actions;
+        var jump = Macro("Sprint jump", "l", ExecutionMode.Once,
+            actions: new[] { KeyDown("LShift"), KeyDown("Space"), KeyUp("space"), RightDown() });
+        using var h = new EngineHarness(Profile("Everywhere", new[] { "*" }, jump));
 
-        var left = Core.Engine.MacroEngine.StillDownAfter(steps);
+        h.Tap(L);
 
-        Assert.Equal(new[] { "LShift", "" }, left.Select(a => a.Key));
-        Assert.Equal(ActionType.MouseDown, left[1].Type);
+        Assert.True(WaitFor(() => h.Sim.Count("key up Shift") == 1 && h.Sim.Count("mouse up Right") == 1)); // "LShift" is sent as Shift
+        Thread.Sleep(50);
+        Assert.Equal(1, h.Sim.Count("key up Space")); // only the macro's own "let go of Space"
+        Assert.Equal(1, h.Sim.Count("key up Shift"));
     }
 
     [Fact]

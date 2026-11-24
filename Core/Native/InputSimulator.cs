@@ -27,8 +27,11 @@ public class InputSimulator : IDisposable
     {
         int vk = KeyHelper.NormalizeToVk(key);
         if (vk == 0) return;
-        _heldKeys[(ushort)vk] = 0;
         SendKeyboardInput((ushort)vk, false);
+        // Noted only once it's sent: a ReleaseAllInputs on another thread at this very moment either
+        // sees it and lets go, or the macro's run lets go of it when it ends. Noted first, it could be
+        // "released" before it was even pressed, and stay held for good.
+        _heldKeys[(ushort)vk] = 0;
     }
 
     public void KeyUp(string key)
@@ -65,11 +68,17 @@ public class InputSimulator : IDisposable
             _ => 0
         };
 
-        _heldMouseButtons[button] = 0;
         SendMouseEvent(flag, 0, 0, data);
+        _heldMouseButtons[button] = 0; // after sending, see KeyDown
     }
 
     public void MouseUp(MouseButtonType button)
+    {
+        SendMouseUp(button);
+        _heldMouseButtons.TryRemove(button, out _);
+    }
+
+    private void SendMouseUp(MouseButtonType button)
     {
         uint flag = button switch
         {
@@ -89,7 +98,26 @@ public class InputSimulator : IDisposable
         };
 
         SendMouseEvent(flag, 0, 0, data);
-        _heldMouseButtons.TryRemove(button, out _);
+    }
+
+    /// <summary>
+    /// Lets go of this key if a macro is holding it. Several threads may try at once (the engine
+    /// switch and the run that pressed it); only the one that takes it off the list sends the "up".
+    /// </summary>
+    public bool ReleaseIfHeld(string key)
+    {
+        int vk = KeyHelper.NormalizeToVk(key);
+        if (vk == 0 || !_heldKeys.TryRemove((ushort)vk, out _)) return false;
+        SendKeyboardInput((ushort)vk, true);
+        return true;
+    }
+
+    /// <summary>Lets go of this mouse button if a macro is holding it (sent once, see the key version).</summary>
+    public bool ReleaseIfHeld(MouseButtonType button)
+    {
+        if (!_heldMouseButtons.TryRemove(button, out _)) return false;
+        SendMouseUp(button);
+        return true;
     }
 
     public void MouseClick(MouseButtonType button, int holdDurationMs = 20, CancellationToken token = default)
@@ -211,13 +239,12 @@ public class InputSimulator : IDisposable
     {
         foreach (var button in _heldMouseButtons.Keys)
         {
-            MouseUp(button);
+            ReleaseIfHeld(button);
         }
 
         foreach (var vk in _heldKeys.Keys)
         {
-            SendKeyboardInput(vk, true);
-            _heldKeys.TryRemove(vk, out _);
+            if (_heldKeys.TryRemove(vk, out _)) SendKeyboardInput(vk, true);
         }
     }
 

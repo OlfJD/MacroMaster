@@ -12,8 +12,20 @@ internal sealed class RecordingSimulator : InputSimulator
 
     public int Count(string what) => Sent.Count(s => s == what);
 
+    /// <summary>
+    /// Called with each key / mouse event just before it is "sent", on the thread that sends it.
+    /// Lets a test do something at an exact moment, e.g. stop a macro in the middle of a key press.
+    /// </summary>
+    public Action<string>? BeforeSend { get; set; }
+
+    private void Record(string what)
+    {
+        BeforeSend?.Invoke(what);
+        Sent.Enqueue(what);
+    }
+
     protected override void SendKeyboardInput(ushort vkCode, bool isKeyUp)
-        => Sent.Enqueue($"key {(isKeyUp ? "up" : "down")} {KeyHelper.VkToString(vkCode)}");
+        => Record($"key {(isKeyUp ? "up" : "down")} {KeyHelper.VkToString(vkCode)}");
 
     /// <summary>What the fake screen shows at a position (0xRRGGBB). Black everywhere by default.</summary>
     public Func<int, int, int> Screen { get; set; } = (_, _) => 0x000000;
@@ -27,7 +39,7 @@ internal sealed class RecordingSimulator : InputSimulator
         if (!isKeyUp) Sent.Enqueue($"char {c}");
     }
 
-    protected override void SendMouseEvent(uint flags, int dx, int dy, uint data) => Sent.Enqueue(flags switch
+    protected override void SendMouseEvent(uint flags, int dx, int dy, uint data) => Record(flags switch
     {
         Win32Api.MOUSEEVENTF_LEFTDOWN => "mouse down Left",
         Win32Api.MOUSEEVENTF_LEFTUP => "mouse up Left",

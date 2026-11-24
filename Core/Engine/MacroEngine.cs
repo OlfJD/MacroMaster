@@ -36,7 +36,18 @@ public class MacroEngine : IDisposable
         IsKeyDown = _keyboardHook.IsKeyDown;
     }
 
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _runningTasks = new();
+    /// <summary>
+    /// What is running: loops and while-held runs under the macro's id, once / repeat runs under
+    /// "id#run#…". The macro object is kept with the run because the list may meanwhile hold another
+    /// object with the same id (an edited copy) or none at all (deleted), see <see cref="StopRunsThatShouldEnd"/>.
+    /// </summary>
+    private readonly ConcurrentDictionary<string, Run> _runningTasks = new();
+    private sealed class Run(CancellationTokenSource cts, MacroDefinition macro)
+    {
+        public CancellationTokenSource Cts { get; } = cts;
+        public MacroDefinition Macro { get; } = macro;
+    }
+    private const string RunKeySeparator = "#run#";
     // Run-once / repeat macros currently executing, so a second press can't start an overlapping copy
     private readonly ConcurrentDictionary<string, byte> _singleRuns = new();
     // "While held" macros running right now → the key / mouse button whose release stops them
@@ -123,7 +134,7 @@ public class MacroEngine : IDisposable
         uint pid = ProcessWatcher.GetForegroundProcessId();
         if (pid == 0) return; // no foreground window for a moment (mid alt-tab): decide on the next tick
 
-        StopRunsOutsideTheirApp();
+        StopRunsThatShouldEnd();
         RefreshModeIndicator();
 
         if (pid == _lastForegroundPid) return;
@@ -178,35 +189,45 @@ public class MacroEngine : IDisposable
     }
 
     /// <summary>
-    /// The app a macro is limited to is only checked when its hotkey is pressed, so without this a
-    /// loop started in the game would carry on clicking on the desktop after alt-tabbing out.
+    /// Stops runs that must not go on:
+    /// <list type="bullet">
+    /// <item>their app is no longer in front: the app a macro is limited to is only checked when its
+    /// hotkey is pressed, so a loop started in the game would carry on clicking on the desktop;</item>
+    /// <item>their switch was turned off: the hotkey of a switched-off macro is ignored, so nothing
+    /// but the engine key could stop the loop any more;</item>
+    /// <item>the macro was deleted or replaced by an edit: the old run had no hotkey left at all.</item>
+    /// </list>
+    /// The window stops such runs itself (<see cref="StopMacro"/>); this is the safety net.
     /// </summary>
-    private void StopRunsOutsideTheirApp()
+    private void StopRunsThatShouldEnd()
     {
         if (_runningTasks.IsEmpty) return;
 
+        // Where each listed macro lives now. By object, not id: an edited macro is a new object with the same id.
+        var profileOf = new Dictionary<MacroDefinition, MacroProfile>();
         foreach (var s in _snapshot)
         {
-            foreach (var m in s.Macros)
-            {
-                bool looping = _runningTasks.ContainsKey(m.Id);
-                if (!looping && !_singleRuns.ContainsKey(m.Id)) continue;
-                if (IsLive(s.Profile) && ProcessWatcher.IsProcessActive(m.ProcessFilter)) continue;
+            foreach (var m in s.Macros) profileOf[m] = s.Profile;
+        }
 
-                if (looping)
-                {
-                    StopLoop(m, announce: false);
-                    TriggerHud(m.Name, "Stopped — you left its app", "square", Muted);
-                }
-                else
-                {
-                    string prefix = m.Id + "#run#";
-                    foreach (var key in _runningTasks.Keys.Where(k => k.StartsWith(prefix, StringComparison.Ordinal)))
-                    {
-                        StopTask(key);
-                    }
-                    _simulator.ReleaseAllInputs();
-                }
+        foreach (var (key, run) in _runningTasks)
+        {
+            var m = run.Macro;
+            string? reason = !profileOf.TryGetValue(m, out var profile) ? "Stopped — it was deleted or changed"
+                           : !m.IsEnabled ? "Stopped — switched off"
+                           : !IsLive(profile) || !ProcessWatcher.IsProcessActive(m.ProcessFilter) ? "Stopped — you left its app"
+                           : null;
+            if (reason == null) continue;
+
+            if (key == m.Id)
+            {
+                StopLoop(m, announce: false); // a loop or while-held run
+                TriggerHud(m.Name, reason, "square", Muted);
+            }
+            else
+            {
+                StopTask(key);                // a once / repeat run that is still playing
+                _simulator.ReleaseAllInputs();
             }
         }
     }
@@ -245,13 +266,8 @@ public class MacroEngine : IDisposable
 
         if (!on)
         {
-            // Stop anything this profile still has looping, so turning it off really silences it
-            foreach (var m in profile.Macros.Where(m => _runningTasks.ContainsKey(m.Id)))
-            {
-                StopTask(m.Id);
-                _holdRuns.TryRemove(m.Id, out _);
-                m.IsRunning = false;
-            }
+            // Stop anything this profile still has running, so turning it off really silences it
+            foreach (var m in profile.Macros) CancelRunsOf(m);
             _simulator.ReleaseAllInputs();
         }
 
@@ -494,9 +510,10 @@ public class MacroEngine : IDisposable
         OnStateRefreshed?.Invoke();
 
         var cts = new CancellationTokenSource();
-        _runningTasks[macro.Id] = cts;
+        var run = new Run(cts, macro);
+        _runningTasks[macro.Id] = run;
 
-        Task.Run(() =>
+        StartRun(() =>
         {
             try
             {
@@ -528,10 +545,15 @@ public class MacroEngine : IDisposable
             }
             finally
             {
+                // Whoever stopped the loop let go of everything right away, but a step that was
+                // pressing a key at that very moment presses it afterwards: let go of it here, once
+                // the loop has really ended, so nothing it pressed can stay held down.
+                ReleaseWhatItHolds(macro.Actions);
+
                 // Only remove our own registration: after a quick off->on toggle a newer run is
                 // already registered under the same id, and removing it would leave that loop
                 // untracked (and unstoppable, even by the killswitch).
-                _runningTasks.TryRemove(new KeyValuePair<string, CancellationTokenSource>(macro.Id, cts));
+                _runningTasks.TryRemove(new KeyValuePair<string, Run>(macro.Id, run));
                 if (!_runningTasks.ContainsKey(macro.Id))
                 {
                     macro.IsRunning = false;
@@ -539,8 +561,16 @@ public class MacroEngine : IDisposable
                 RefreshModeIndicator();
                 OnStateRefreshed?.Invoke();
             }
-        }, cts.Token);
+        });
     }
+
+    /// <summary>
+    /// Starts a macro run on a thread of its own. A run spends nearly all its time waiting, and on the
+    /// shared thread pool every running loop kept a pool thread busy: with a few loops on, a new run
+    /// could wait half a second or more for a free thread before its first step.
+    /// </summary>
+    private static void StartRun(Action body) =>
+        Task.Factory.StartNew(body, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
     private void StopLoop(MacroDefinition macro, bool announce)
     {
@@ -579,11 +609,11 @@ public class MacroEngine : IDisposable
             TriggerHud(macro.Name, macro.Mode == ExecutionMode.RepeatCount ? $"Running ×{Math.Max(1, macro.RepeatCount)}" : "Running", "play", Accent);
 
             // Registered under a unique key so switching the engine off can cancel long repeat runs too
-            string runKey = $"{macro.Id}#run#{Guid.NewGuid():N}";
+            string runKey = $"{macro.Id}{RunKeySeparator}{Guid.NewGuid():N}";
             var cts = new CancellationTokenSource();
-            _runningTasks[runKey] = cts;
+            _runningTasks[runKey] = new Run(cts, macro);
 
-            Task.Run(() =>
+            StartRun(() =>
             {
                 try
                 {
@@ -602,7 +632,7 @@ public class MacroEngine : IDisposable
                 {
                     // A run that ends must not leave anything pressed: "Key down S" + "Mouse down Right"
                     // as a Once macro used to keep both held forever, with nothing left to stop.
-                    ReleaseLeftDown(macro.Actions);
+                    ReleaseWhatItHolds(macro.Actions);
                     _runningTasks.TryRemove(runKey, out _);
                     _singleRuns.TryRemove(macro.Id, out _);
                 }
@@ -611,45 +641,18 @@ public class MacroEngine : IDisposable
     }
 
     /// <summary>
-    /// Releases the keys and buttons these steps press down without a matching release later on.
-    /// Only those: keys another macro (e.g. a "hold left click" loop) keeps down are left alone.
+    /// Lets go of the keys and buttons these steps press down and that are still held, once a run has
+    /// ended (finished, stopped or cancelled). Only those: a key the run never got to press gets no
+    /// "up" (the player may be holding it), and keys only another macro holds (e.g. a "hold left
+    /// click" loop) are left alone.
     /// </summary>
-    private void ReleaseLeftDown(IEnumerable<MacroAction> actions)
+    private void ReleaseWhatItHolds(IEnumerable<MacroAction> actions)
     {
-        foreach (var step in StillDownAfter(actions))
+        foreach (var step in actions)
         {
-            if (step.Type == ActionType.KeyDown) _simulator.KeyUp(step.Key);
-            else _simulator.MouseUp(step.MouseButton);
+            if (step.Type == ActionType.KeyDown) _simulator.ReleaseIfHeld(step.Key);
+            else if (step.Type == ActionType.MouseDown) _simulator.ReleaseIfHeld(step.MouseButton);
         }
-    }
-
-    /// <summary>The "down" steps whose key or button is still down once all the steps have run.</summary>
-    internal static List<MacroAction> StillDownAfter(IEnumerable<MacroAction> actions)
-    {
-        var down = new List<MacroAction>();
-        foreach (var a in actions)
-        {
-            switch (a.Type)
-            {
-                case ActionType.KeyDown when !string.IsNullOrEmpty(a.Key):
-                    if (!down.Any(d => d.Type == ActionType.KeyDown && SameKey(d.Key, a.Key))) down.Add(a);
-                    break;
-                case ActionType.KeyUp:
-                    down.RemoveAll(d => d.Type == ActionType.KeyDown && SameKey(d.Key, a.Key));
-                    break;
-                case ActionType.MouseDown:
-                    if (!down.Any(d => d.Type == ActionType.MouseDown && d.MouseButton == a.MouseButton)) down.Add(a);
-                    break;
-                case ActionType.MouseUp:
-                    down.RemoveAll(d => d.Type == ActionType.MouseDown && d.MouseButton == a.MouseButton);
-                    break;
-            }
-        }
-        return down;
-
-        static bool SameKey(string x, string y) =>
-            string.Equals(x, y, StringComparison.OrdinalIgnoreCase) ||
-            (KeyHelper.NormalizeToVk(x) is var vx && vx != 0 && vx == KeyHelper.NormalizeToVk(y));
     }
 
     private void ExecuteActionSequence(ObservableCollection<MacroAction> actions, CancellationToken token)
@@ -761,7 +764,8 @@ public class MacroEngine : IDisposable
     {
         foreach (var kvp in _runningTasks)
         {
-            kvp.Value.Cancel();
+            kvp.Value.Cts.Cancel();
+            kvp.Value.Macro.IsRunning = false;
         }
         _runningTasks.Clear();
         _holdRuns.Clear();
@@ -773,11 +777,45 @@ public class MacroEngine : IDisposable
         }
     }
 
+    /// <summary>
+    /// Stops this macro right away, whatever it is doing (a loop, a while-held run, or a once / repeat
+    /// run still playing), and lets go of what it holds. The window calls it when a macro is switched
+    /// off, deleted or replaced by an edit: the hotkey of such a macro can't stop it any more.
+    /// False if it wasn't running.
+    /// </summary>
+    public bool StopMacro(MacroDefinition macro)
+    {
+        if (!CancelRunsOf(macro)) return false;
+
+        _simulator.ReleaseAllInputs();
+        TriggerHud(macro.Name, "Stopped", "square", Muted);
+        RefreshModeIndicator();
+        OnStateRefreshed?.Invoke();
+        return true;
+    }
+
+    /// <summary>Cancels every run of this macro (found by id). True if there was one.</summary>
+    private bool CancelRunsOf(MacroDefinition macro)
+    {
+        string runPrefix = macro.Id + RunKeySeparator;
+        bool any = false;
+        foreach (var (key, run) in _runningTasks)
+        {
+            if (key != macro.Id && !key.StartsWith(runPrefix, StringComparison.Ordinal)) continue;
+            StopTask(key);
+            run.Macro.IsRunning = false; // the running object can be an older copy of this macro
+            any = true;
+        }
+        _holdRuns.TryRemove(macro.Id, out _);
+        macro.IsRunning = false;
+        return any;
+    }
+
     private void StopTask(string key)
     {
-        if (_runningTasks.TryRemove(key, out var cts))
+        if (_runningTasks.TryRemove(key, out var run))
         {
-            cts.Cancel();
+            run.Cts.Cancel();
         }
     }
 

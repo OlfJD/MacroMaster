@@ -630,6 +630,11 @@ public partial class MainWindow : Window
     private void MacroEnable_Changed(object sender, RoutedEventArgs e)
     {
         if (!_isInitialized) return;
+        // Off means off: a running loop has to stop now, its hotkey is ignored from here on
+        if (sender is System.Windows.Controls.CheckBox { IsChecked: false, DataContext: MacroDefinition macro })
+        {
+            _engine.StopMacro(macro);
+        }
         SaveState();
         UpdateCounts();
         // If a filter is active the row may need to disappear
@@ -713,6 +718,9 @@ public partial class MainWindow : Window
             {
                 int idx = profile.Macros.IndexOf(existing);
                 if (idx < 0) return; // deleted meanwhile
+                // A run of the old version would carry on with the old steps, and (if it is no longer
+                // a loop) without a hotkey that can stop it. Start the new version with its hotkey.
+                _engine.StopMacro(existing);
                 profile.Macros[idx] = editor.Macro;
             }
             SaveState();
@@ -822,6 +830,7 @@ public partial class MainWindow : Window
         if (sender is not FrameworkElement { DataContext: MacroDefinition macro } || _engine.SelectedProfile is not { } profile) return;
 
         // No "are you sure?": the delete can be undone from the bar that appears (or Ctrl+Z)
+        _engine.StopMacro(macro); // a deleted loop must not carry on where nothing can stop it
         Action restore = ProfileEdits.RemoveMacro(profile, macro);
         SaveState();
         RefreshMacrosList();
