@@ -39,6 +39,28 @@ public static class ProfileEdits
         };
     }
 
+    /// <summary>
+    /// Puts the editor's saved copy in the place of the macro. If it was its mode group's active mode
+    /// and the edit took it out of that group (another group name, or no longer a mode), the group's
+    /// next mode takes over, like when it is deleted: otherwise the group's hotkey went dead until a
+    /// switch key was pressed. False if the macro isn't in the profile any more.
+    /// </summary>
+    public static bool ReplaceMacro(MacroProfile profile, MacroDefinition existing, MacroDefinition edited)
+    {
+        int index = profile.Macros.IndexOf(existing);
+        if (index < 0) return false;
+        profile.Macros[index] = edited;
+
+        bool leftItsGroup = existing.RequiresArming && existing.IsCurrentlyArmed &&
+                            (!edited.RequiresArming || edited.ModeGroupKey != existing.ModeGroupKey);
+        if (leftItsGroup)
+        {
+            var rest = profile.Macros.Where(m => m.RequiresArming && m.ModeGroupKey == existing.ModeGroupKey).ToList();
+            if (rest.Count > 0 && !rest.Any(m => m.IsCurrentlyArmed)) rest[0].IsCurrentlyArmed = true;
+        }
+        return true;
+    }
+
     /// <summary>Removes a profile and returns the action that puts it back at its old position.</summary>
     public static Action RemoveProfile(ObservableCollection<MacroProfile> profiles, MacroProfile profile)
     {

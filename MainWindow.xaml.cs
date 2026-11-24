@@ -727,12 +727,12 @@ public partial class MainWindow : Window
             }
             else
             {
-                int idx = profile.Macros.IndexOf(existing);
-                if (idx < 0) return; // deleted meanwhile
+                if (!profile.Macros.Contains(existing)) return; // deleted meanwhile
                 // A run of the old version would carry on with the old steps, and (if it is no longer
                 // a loop) without a hotkey that can stop it. Start the new version with its hotkey.
                 _engine.StopMacro(existing);
-                profile.Macros[idx] = editor.Macro;
+                ProfileEdits.ReplaceMacro(profile, existing, editor.Macro);
+                _engine.RefreshModeIndicator();
             }
             SaveState();
             RefreshMacrosList();

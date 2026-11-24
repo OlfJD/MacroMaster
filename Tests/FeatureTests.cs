@@ -227,6 +227,53 @@ public class UndoAndReorderTests
         Assert.False(ground.IsCurrentlyArmed);
     }
 
+    private static MacroDefinition EditedCopy(MacroDefinition m)
+    {
+        var copy = MacroJsonSerializer.CloneMacro(m);
+        copy.Id = m.Id; // the editor keeps the id
+        return copy;
+    }
+
+    [Fact]
+    public void Editing_the_active_mode_out_of_its_group_hands_the_group_to_the_next_mode()
+    {
+        var p = Sample(out var well, out var ground, out _, out _);
+        var edited = EditedCopy(well);
+        edited.ArmingGroupName = "Other group"; // the only (so active) mode of its new group
+
+        Assert.True(ProfileEdits.ReplaceMacro(p, well, edited));
+
+        Assert.Same(edited, p.Macros[0]);
+        Assert.True(ground.IsCurrentlyArmed); // the skate modes' hotkey must not go dead
+    }
+
+    [Fact]
+    public void Turning_the_active_mode_into_a_plain_macro_hands_over_as_well()
+    {
+        var p = Sample(out var well, out var ground, out _, out _);
+        var edited = EditedCopy(well);
+        edited.RequiresArming = false;
+        edited.IsCurrentlyArmed = false;
+
+        ProfileEdits.ReplaceMacro(p, well, edited);
+
+        Assert.True(ground.IsCurrentlyArmed);
+    }
+
+    [Fact]
+    public void Editing_a_mode_within_its_group_leaves_the_other_modes_alone()
+    {
+        var p = Sample(out var well, out var ground, out _, out _);
+        var edited = EditedCopy(well);
+        edited.Name = "Wellskate v2";
+
+        ProfileEdits.ReplaceMacro(p, well, edited);
+
+        Assert.True(edited.IsCurrentlyArmed);
+        Assert.False(ground.IsCurrentlyArmed);
+        Assert.False(ProfileEdits.ReplaceMacro(p, well, edited)); // already replaced
+    }
+
     [Fact]
     public void Undo_puts_a_deleted_profile_back_in_its_place()
     {
