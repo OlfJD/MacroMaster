@@ -7,21 +7,21 @@ namespace MacroMaster.Core.Native;
 
 public class InputSimulator : IDisposable
 {
-    private bool _multimediaTimerActive = false;
-
     // Inputs this simulator pressed and hasn't released yet, so ReleaseAllInputs can let go of
     // exactly those (instead of sending stray "up" events for buttons the user is holding)
     private readonly ConcurrentDictionary<ushort, byte> _heldKeys = new();
     private readonly ConcurrentDictionary<MouseButtonType, byte> _heldMouseButtons = new();
 
-    public InputSimulator()
-    {
-        // Request 1ms timer resolution from Windows multimedia timer
-        if (Win32Api.TimeBeginPeriod(1) == 0)
-        {
-            _multimediaTimerActive = true;
-        }
-    }
+    /// <summary>
+    /// A macro run starts: ask Windows for the 1 ms timer (short waits such as the 1 ms yield of a
+    /// loop depend on it). It used to be held from start-up on, also while MacroMaster only sat in the
+    /// tray, which keeps the PC's timer ticking fast and costs power. Windows counts these requests,
+    /// so every run asks for its own and <see cref="EndPreciseTiming"/> gives it back.
+    /// </summary>
+    public virtual void BeginPreciseTiming() => Win32Api.TimeBeginPeriod(1);
+
+    /// <summary>A macro run ended: give its 1 ms timer request back.</summary>
+    public virtual void EndPreciseTiming() => Win32Api.TimeEndPeriod(1);
 
     /// <summary>A press, click or move Windows refused ends the macro's run (see <see cref="InputBlockedException"/>).</summary>
     private static void Require(bool accepted)
@@ -429,11 +429,6 @@ public class InputSimulator : IDisposable
 
     public void Dispose()
     {
-        if (_multimediaTimerActive)
-        {
-            Win32Api.TimeEndPeriod(1);
-            _multimediaTimerActive = false;
-        }
         GC.SuppressFinalize(this);
     }
 }

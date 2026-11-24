@@ -51,6 +51,23 @@ public class RefusedInputTests
         Assert.Equal(0, h.Sim.Count("key up S"));
     }
 
+    [Fact]
+    public void The_1_ms_timer_is_only_held_while_macros_run()
+    {
+        var loop = Macro("Loop", "F6", ExecutionMode.Toggle, actions: new[] { Type("x"), Wait(5) });
+        var once = Macro("Once", "l", actions: new[] { Type("o"), Wait(100) });
+        using var h = new EngineHarness(Profile("P", Array.Empty<string>(), loop, once));
+        Assert.Equal(0, h.Sim.PreciseTimingRequests); // idle in the tray: not held
+
+        h.Tap(F6);
+        h.Tap(L);
+        Assert.True(WaitFor(() => h.Sim.PreciseTimingRequests == 2)); // one per running macro
+
+        Assert.True(WaitFor(() => h.Sim.PreciseTimingRequests == 1)); // the once run ended
+        h.Tap(F6);
+        Assert.True(WaitFor(() => h.Sim.PreciseTimingRequests == 0));
+    }
+
     [Theory]
     [InlineData(1920)]
     [InlineData(2560)]

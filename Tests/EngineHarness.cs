@@ -21,6 +21,13 @@ internal sealed class RecordingSimulator : InputSimulator
     /// <summary>Pretend Windows refuses every event from now on (lock screen, administrator window…).</summary>
     public volatile bool RefuseInput;
 
+    /// <summary>How many runs currently hold the 1 ms timer (the real one isn't touched).</summary>
+    public int PreciseTimingRequests => Volatile.Read(ref _preciseTiming);
+    private int _preciseTiming;
+
+    public override void BeginPreciseTiming() => Interlocked.Increment(ref _preciseTiming);
+    public override void EndPreciseTiming() => Interlocked.Decrement(ref _preciseTiming);
+
     private bool Record(string what)
     {
         BeforeSend?.Invoke(what);

@@ -574,6 +574,7 @@ public class MacroEngine : IDisposable
     private void StartRun(MacroDefinition macro, Action body) =>
         Task.Factory.StartNew(() =>
         {
+            _simulator.BeginPreciseTiming(); // only while something runs, see InputSimulator
             try { body(); }
             catch (InputBlockedException)
             {
@@ -586,6 +587,10 @@ public class MacroEngine : IDisposable
             {
                 AppLog.Error($"macro \"{macro.Name}\" stopped on an error", ex);
                 TriggerHud(macro.Name, "Stopped on an error (see errors.log)", "octagon-x", Danger);
+            }
+            finally
+            {
+                _simulator.EndPreciseTiming();
             }
         }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
