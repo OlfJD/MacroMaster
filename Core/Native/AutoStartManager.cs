@@ -26,12 +26,12 @@ public static class AutoStartManager
 
     /// <summary>
     /// Every sync and every change to the start entry is written here, one line each, so a start
-    /// entry that goes missing can be traced back. Null = no log (tests).
+    /// entry that goes missing can be traced back. In the data folder, so a copy on its own folder
+    /// (MACROMASTER_DATA_DIR, for trying things out) doesn't write into the real one. Null = no log (tests).
     /// </summary>
-    internal static string? LogPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "MacroMaster", "autostart.log");
+    internal static string? LogPath = Path.Combine(Parsers.MacroJsonSerializer.GetAppDataDirectory(), "autostart.log");
 
-    private static void Log(string what)
+    internal static void Log(string what)
     {
         if (LogPath == null) return;
         try

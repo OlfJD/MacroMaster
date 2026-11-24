@@ -278,6 +278,14 @@ public partial class MainWindow : Window
         Activate();
     }
 
+    /// <summary>MacroMaster was started again while this copy runs (Start menu, desktop icon): show this one.</summary>
+    public void ShowFromAnotherLaunch()
+    {
+        Show();
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        WindowHelper.ForceToFront(this);
+    }
+
     /// <summary>
     /// Quick-open key (Settings): brings the window in front of everything, e.g. to make a macro
     /// mid-game. Pressed again while MacroMaster is in front, it gets out of the way again.
@@ -1259,7 +1267,8 @@ public partial class MainWindow : Window
         SaveState();
         try
         {
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = true, Verb = "runas" });
+            // --replaces: the new copy waits until this one has closed (only one copy may run, see App)
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, $"--replaces {Environment.ProcessId}") { UseShellExecute = true, Verb = "runas" });
         }
         catch (Win32Exception)
         {

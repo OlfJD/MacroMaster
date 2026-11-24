@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using MacroMaster.Core.Native;
+using MacroMaster.Core.Parsers;
 
 namespace MacroMaster;
 
@@ -8,22 +10,43 @@ namespace MacroMaster;
 /// </summary>
 public partial class App : System.Windows.Application
 {
+    // Held for the whole run: while it exists, this copy owns the data folder
+    private SingleInstance? _instance;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
-        // Started by Windows at sign-in while a copy is already running (e.g. both the old normal
-        // and the new administrator start fired once): the running copy wins.
         bool autostart = e.Args.Any(a => a.Equals("--autostart", StringComparison.OrdinalIgnoreCase) ||
                                          a.Equals("-silent", StringComparison.OrdinalIgnoreCase) ||
                                          a.Equals("-minimized", StringComparison.OrdinalIgnoreCase));
-        if (autostart)
+
+        // "Restart as administrator" starts this copy while the old one is still closing: wait for it
+        int replaces = Array.IndexOf(e.Args, "--replaces");
+        if (replaces >= 0 && replaces + 1 < e.Args.Length && int.TryParse(e.Args[replaces + 1], out int oldPid))
         {
-            using var me = System.Diagnostics.Process.GetCurrentProcess();
-            if (System.Diagnostics.Process.GetProcessesByName(me.ProcessName).Any(p => p.Id != me.Id))
+            try { using var old = System.Diagnostics.Process.GetProcessById(oldPid); old.WaitForExit(10000); }
+            catch (ArgumentException) { } // already gone
+        }
+
+        // One copy per data folder: two copies each saved their own list over the other's (macros made
+        // in one window were lost) and both ran every hotkey. Before the main window exists, which
+        // would install the hooks.
+        _instance = SingleInstance.Claim(MacroJsonSerializer.GetAppDataDirectory());
+        if (!_instance.IsFirst)
+        {
+            if (autostart)
             {
-                Environment.Exit(0); // before the main window exists (it would install the hooks)
+                // Started by Windows at sign-in while a copy already runs (e.g. both the old normal and
+                // the new administrator start fired): the running copy wins
+                AutoStartManager.Log("started at sign-in, but MacroMaster already runs: this copy quits");
             }
+            else if (!_instance.AskRunningCopyToShow())
+            {
+                System.Windows.MessageBox.Show("MacroMaster is already running. Open it from its icon in the notification area of the taskbar.",
+                                               "MacroMaster", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            Environment.Exit(0);
         }
 
         AppDomain.CurrentDomain.UnhandledException += (s, args) =>
@@ -42,6 +65,9 @@ public partial class App : System.Windows.Application
         MainWindow = window;
         if (autostart) window.StartHidden();
         else window.Show();
+
+        // Started again (Start menu, desktop icon, "Launch MacroMaster.bat"): show this copy instead
+        _instance.ListenForShowRequests(() => Dispatcher.BeginInvoke(window.ShowFromAnotherLaunch));
     }
 
     private static void LogCrash(Exception? ex)
