@@ -271,8 +271,9 @@ public class MacroEngine : IDisposable
             _simulator.ReleaseAllInputs();
         }
 
+        int ready = profile.Macros.Count(m => m.IsEnabled && m.HasHotkey);
         TriggerHud(on ? $"{profile.Name} on" : $"{profile.Name} off",
-                   on ? $"{profile.Macros.Count(m => m.IsEnabled)} macros ready" : "Its hotkeys are ignored",
+                   on ? (ready == 1 ? "1 macro ready" : $"{ready} macros ready") : "Its hotkeys are ignored",
                    "logo", on ? Accent : Muted);
         RefreshModeIndicator();
         OnStateRefreshed?.Invoke();

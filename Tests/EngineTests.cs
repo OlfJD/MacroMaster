@@ -225,6 +225,18 @@ public class EngineSwitchTests
     }
 
     [Fact]
+    public void Turning_a_profile_on_counts_only_macros_that_have_a_hotkey()
+    {
+        var profile = Profile("Tools", Array.Empty<string>(), Macro("With key", "F6"), Macro("No key yet", ""));
+        profile.IsOn = false;
+        using var h = new EngineHarness(profile);
+
+        h.Engine.SetProfileOn(h.Engine.Profiles[0], true);
+
+        Assert.Contains("Tools on | 1 macro ready", h.Hud); // was "2 macros ready"
+    }
+
+    [Fact]
     public void An_old_kill_switch_key_becomes_the_engine_key()
     {
         var old = JsonSerializer.Deserialize<AppSettings>("""{ "DataVersion": 3, "EmergencyKillswitchKey": "F9", "MasterEngineEnabled": true }""")!;

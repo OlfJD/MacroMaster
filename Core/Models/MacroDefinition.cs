@@ -61,6 +61,10 @@ public class MacroDefinition
     [JsonIgnore]
     public bool IsRunning { get; set; } = false;
 
+    /// <summary>Has a hotkey, so it can actually be started. A macro saved without one is listed but never runs.</summary>
+    [JsonIgnore]
+    public bool HasHotkey => !string.IsNullOrWhiteSpace(Trigger?.PrimaryKey);
+
     /// <summary>Name of the mode group this macro belongs to, or "" when it doesn't switch modes. Used to group rows in the list.</summary>
     [JsonIgnore]
     public string ModeGroupKey => !RequiresArming ? string.Empty

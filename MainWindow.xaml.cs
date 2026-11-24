@@ -430,7 +430,7 @@ public partial class MainWindow : Window
 
         // Status bar covers every profile, since several can be live at once
         var onProfiles = _engine.Profiles.Where(p => p.IsOn).ToList();
-        int live = onProfiles.Sum(p => p.Macros.Count(m => m.IsEnabled));
+        int live = onProfiles.Sum(p => p.Macros.Count(m => m.IsEnabled && m.HasHotkey)); // without a hotkey it can't run
         int running = _engine.Profiles.Sum(p => p.Macros.Count(m => m.IsRunning));
         string profilesText = onProfiles.Count switch
         {
