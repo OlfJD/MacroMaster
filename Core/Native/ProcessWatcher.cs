@@ -5,11 +5,10 @@ namespace MacroMaster.Core.Native;
 
 public class ProcessWatcher
 {
-    // Process.GetProcessById is comparatively expensive and this runs inside the low-level hook on
-    // every trigger check, so remember the name for the last foreground PID.
-    private static uint _cachedPid;
-    private static string _cachedName = string.Empty;
-    private static readonly object _cacheLock = new();
+    // This runs inside the low-level hook on every trigger check, so the name of the app in front is
+    // remembered. Keyed by window and process id, and for a second at most: a process id that Windows
+    // hands to a new program could otherwise keep the old program's name.
+    private static readonly ForegroundNameCache _cache = new();
 
     /// <summary>
     /// Tests only: pretend this is what's in front instead of asking Windows.
@@ -37,22 +36,16 @@ public class ProcessWatcher
 
         try
         {
-            uint processId = GetForegroundProcessId();
+            IntPtr window = Win32Api.GetForegroundWindow();
+            if (window == IntPtr.Zero) return string.Empty;
+            Win32Api.GetWindowThreadProcessId(window, out uint processId);
             if (processId == 0) return string.Empty;
 
-            lock (_cacheLock)
-            {
-                if (processId == _cachedPid) return _cachedName;
-            }
+            long now = Stopwatch.GetTimestamp();
+            if (_cache.TryGet(window, processId, now, out string cached)) return cached;
 
-            using var process = Process.GetProcessById((int)processId);
-            string name = process.ProcessName.ToLowerInvariant(); // e.g. "destiny2", "javaw"
-
-            lock (_cacheLock)
-            {
-                _cachedPid = processId;
-                _cachedName = name;
-            }
+            string name = ProcessNameOf(processId); // e.g. "destiny2", "javaw"
+            if (name.Length > 0) _cache.Store(window, processId, name, now);
             return name;
         }
         catch
@@ -60,6 +53,37 @@ public class ProcessWatcher
             return string.Empty;
         }
     }
+
+    /// <summary>
+    /// A process's name, lower case and without ".exe", read straight from Windows with only the
+    /// limited query right (granted for most games, anti-cheat protected ones included). Falls back to
+    /// Process.ProcessName. "" if Windows won't say.
+    /// </summary>
+    internal static string ProcessNameOf(uint processId)
+    {
+        IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+        if (process != IntPtr.Zero)
+        {
+            try
+            {
+                var path = new System.Text.StringBuilder(1024);
+                int size = path.Capacity;
+                if (QueryFullProcessImageNameW(process, 0, path, ref size))
+                    return System.IO.Path.GetFileNameWithoutExtension(path.ToString()).ToLowerInvariant();
+            }
+            finally { CloseHandle(process); }
+        }
+
+        try
+        {
+            using var p = Process.GetProcessById((int)processId); // the old way, as a fallback
+            return p.ProcessName.ToLowerInvariant();
+        }
+        catch { return string.Empty; }
+    }
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool QueryFullProcessImageNameW(IntPtr process, int flags, System.Text.StringBuilder path, ref int size);
 
     /// <summary>True while one of MacroMaster's own windows is in front.</summary>
     public static bool IsOwnWindowActive()
@@ -136,4 +160,43 @@ public class ProcessWatcher
     private static extern bool CloseHandle(IntPtr handle);
 
     #endregion
+}
+
+/// <summary>The last foreground window's process name, for one window and process id, for up to a second.</summary>
+internal sealed class ForegroundNameCache
+{
+    public static readonly long MaxAge = Stopwatch.Frequency; // one second, in Stopwatch ticks
+
+    private readonly object _lock = new();
+    private IntPtr _window;
+    private uint _processId;
+    private string _name = string.Empty;
+    private long _storedAt;
+    private bool _hasEntry;
+
+    public bool TryGet(IntPtr window, uint processId, long now, out string name)
+    {
+        lock (_lock)
+        {
+            if (_hasEntry && _window == window && _processId == processId && now - _storedAt < MaxAge)
+            {
+                name = _name;
+                return true;
+            }
+        }
+        name = string.Empty;
+        return false;
+    }
+
+    public void Store(IntPtr window, uint processId, string name, long now)
+    {
+        lock (_lock)
+        {
+            _window = window;
+            _processId = processId;
+            _name = name;
+            _storedAt = now;
+            _hasEntry = true;
+        }
+    }
 }
