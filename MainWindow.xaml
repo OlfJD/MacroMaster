@@ -323,7 +323,7 @@
                                         <ColumnDefinition Width="*"/>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="116"/>
-                                        <ColumnDefinition Width="64"/>
+                                        <ColumnDefinition Width="68"/>
                                     </Grid.ColumnDefinitions>
 
                                     <CheckBox x:Name="EnableSwitch" Style="{StaticResource Switch}" IsChecked="{Binding IsEnabled}"
@@ -420,6 +420,10 @@
                                         </MultiDataTrigger.Conditions>
                                         <Setter TargetName="LiveDot" Property="Visibility" Value="Visible"/>
                                     </MultiDataTrigger>
+                                    <!-- In a mode group the card's content runs to its right edge (MacroRow): keep the buttons off it -->
+                                    <DataTrigger Binding="{Binding RequiresArming}" Value="True">
+                                        <Setter TargetName="RowActions" Property="Margin" Value="0,0,9.5,0"/>
+                                    </DataTrigger>
                                 </DataTemplate.Triggers>
                             </DataTemplate>
                         </ListBox.ItemTemplate>

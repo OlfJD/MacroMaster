@@ -1109,6 +1109,10 @@
                         <DataTrigger Binding="{Binding RequiresArming}" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBrush}"/>
                             <Setter TargetName="Hover" Property="Background" Value="{StaticResource PressedBrush}"/>
+                            <!-- The group's frame (8 padding + 1.5 outline) makes these cards 9.5 px narrower on the
+                                 right: let the content run on to the edge so hotkey and "Once · 3 steps" stay in
+                                 the same columns as outside a group. The edit buttons keep their gap (item template). -->
+                            <Setter Property="Padding" Value="14,0,0.5,0"/>
                         </DataTrigger>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Trigger.EnterActions><BeginStoryboard Storyboard="{StaticResource HoverIn}"/></Trigger.EnterActions>
